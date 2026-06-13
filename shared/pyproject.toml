@@ -1,0 +1,65 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "sgs-shared"
+version = "0.0.0"
+description = "Shared cross-cutting layers for the Mini Space Ground Segment (Epic 3): time-service, catalogue (PostgreSQL), anomaly. Depends on neither segment."
+requires-python = ">=3.11"
+readme = "README.md"
+license = { text = "Proprietary" }
+dependencies = [
+    "psycopg[binary]>=3.1",
+]
+
+[project.optional-dependencies]
+dev = [
+    "ruff>=0.5",
+    "mypy>=1.10",
+    "pytest>=8",
+    "import-linter>=2.0",
+]
+
+[project.scripts]
+sgs-ops = "sgs_shared.cli.main:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+sgs_shared = ["py.typed"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM", "RUF"]
+
+[tool.mypy]
+python_version = "3.11"
+strict = true
+mypy_path = "src"
+explicit_package_bases = true
+namespace_packages = true
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"
+markers = [
+    "postgres: tests that require a live PostgreSQL (PDGS_PG_DSN set).",
+]
+
+[tool.importlinter]
+root_package = "sgs_shared"
+# pdgs/sgs_sim are external to this package; the forbidden contract below must scan
+# external imports to detect a forbidden cross-segment dependency.
+include_external_packages = true
+
+[[tool.importlinter.contracts]]
+name = "shared depends on neither segment"
+type = "forbidden"
+source_modules = ["sgs_shared"]
+forbidden_modules = ["pdgs", "sgs_sim"]

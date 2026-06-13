@@ -4,7 +4,7 @@
 > every epic, never endlessly appended. Cap ~150 lines. Read this first when
 > re-entering after a gap. Full methodology + conventions: `CLAUDE.md`.
 
-_Last updated: 2026-06-13 — Epic 1 (payload) + Epic 2 (control) CLOSED on `main`._
+_Last updated: 2026-06-13 — Epics 1 & 2 CLOSED on `main`; Epic 3 (shared) Phase 0 done on `epic/shared`._
 
 ## Stack snapshot
 
@@ -25,7 +25,21 @@ _Last updated: 2026-06-13 — Epic 1 (payload) + Epic 2 (control) CLOSED on `mai
 
 ## In-flight work
 
-- None. Epics 1 and 2 are complete and on `main`.
+- **Epic 3 (shared layers) on branch `epic/shared`. Phase 0 DONE** (riskiest
+  assumption proven): `shared/` package (`sgs_shared`, own gates; import-linter
+  forbids importing `pdgs`/`sgs_sim`) + a shared **PostgreSQL** catalogue
+  (`PostgresCatalogue`, unified `CatalogueEntry` with origin+simulated) + the
+  `sgs-ops` operator CLI (dark flag `SGS_SHARED`). **Verified live:** `sgs-ops
+  status` lists one payload product + one control reference together from Postgres,
+  each labelled. ICD §3.1; spec `docs/specs/shared.md`. 3 ESCALATED decisions
+  adopted (CLI MVP; Postgres for new writes + keep SQLite offline; read-only
+  Yamcs-REST bridge).
+- **Next: Phase 1 (shared catalogue, REQ-INT-02)** — full `PostgresCatalogue`
+  (all `Catalogue` ABC methods + provenance), payload products + control telemetry
+  refs both recorded with unified provenance, single query surface, read-only
+  Yamcs-REST control bridge; **freeze the catalogue schema** (the load-bearing
+  freeze). Postgres runs via `docker compose --profile epic3 up -d postgres`;
+  `PDGS_PG_DSN=postgresql://sgs:change-me@localhost:5432/sgs_catalogue`.
 
 ## Epic 1 (payload) — outcome
 
@@ -86,8 +100,8 @@ _Last updated: 2026-06-13 — Epic 1 (payload) + Epic 2 (control) CLOSED on `mai
 
 ## Next step
 
-- **Epic 3 — shared layers:** a shared time service (PUS-9 OBT↔UTC correlation), a
-  shared catalogue (PostgreSQL — products + telemetry refs, one query surface), a
-  single anomaly model (spacecraft OOL + payload failures), and one operator
-  surface across both halves. Branch `epic/shared`; prompt-engineer → product-owner
-  → spec, then Phase 0.
+- **Epic 3 — Phase 1 (shared catalogue, REQ-INT-02):** complete `PostgresCatalogue`
+  (full `Catalogue` ABC + unified provenance); record payload products + control
+  telemetry refs with one query surface; add a read-only Yamcs-REST control bridge;
+  **freeze the shared catalogue schema** (record in ICD §3). Then Phases 2 (anomaly
+  model), 3 (time service), 4 (operator surface + close).

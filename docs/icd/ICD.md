@@ -246,3 +246,28 @@ big-endian; telecommands are SIMULATED.
 **Verified live (2026-06-13):** `SET_MODE(SAFE)` via Yamcs → simulator executes →
 `spacecraft_mode` becomes SAFE in HK; PUS-1 ACKs (APID 102) received; an
 out-of-range `mode` is rejected at validation (HTTP 400, not transmitted).
+
+---
+
+## 3. Shared layers interface (Epic 3)
+
+> Unification layer `shared/` (Python, `sgs_shared`) — `time_service`, `catalogue`,
+> `anomaly` + the `sgs-ops` operator surface. Depends on **neither** segment
+> (import-linter forbidden contract on `pdgs`/`sgs_sim`). Contracts frozen per phase.
+
+### 3.1 Shared catalogue (PostgreSQL) — Phase 0 boundary
+
+- DB: **PostgreSQL** (`postgres` compose service, `epic3` profile; db `sgs_catalogue`).
+- `PostgresCatalogue(dsn=None)` (DSN arg or `PDGS_PG_DSN` env) implements the shared
+  `Catalogue` ABC (`register` / `get` / `list(*, origin=None)`); idempotent schema
+  (`catalogue_entries`, UTC `timestamptz`).
+- Unified `CatalogueEntry`: `entry_id`, **`origin`** (payload|control),
+  **`simulated`**, `product_type`, `status`, `sensing_time`/`ingest_time` (UTC),
+  `source_version`, `reference` (locator), `detail`. Every row carries origin +
+  simulated — unification never erases the real-vs-simulated distinction.
+- Operator surface: `sgs-ops` CLI behind the dark flag **`SGS_SHARED`** (ships dark).
+- The catalogue **schema is frozen in Phase 1**; this is the Phase-0 boundary only.
+
+**Verified live (2026-06-13):** `sgs-ops status` lists one payload product +
+one control reference together from the shared Postgres catalogue, each labelled
+(control = `control-simulated`); postgres-marked tests pass.
