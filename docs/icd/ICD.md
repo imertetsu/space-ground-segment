@@ -195,3 +195,28 @@ packets) is ingested by the live Yamcs `UdpTmDataLink` (`udp-in dataInCount`
 advanced, no `SHORT_PACKET` errors). Decommutation to named engineering
 parameters lands in Phase 2 (our XTCE MDB replaces the quickstart's; APID 100 =
 our HK).
+
+### 2.6 FROZEN Phase 2 MDB (TM decommutation + limits)
+
+Frozen 2026-06-13. SpaceSystem **`SGS`** (labelled SIMULATED) decodes HK APID 100
+(§2.5) to engineering units and limit-checks. Authoritative:
+`control/yamcs/src/main/yamcs/mdb/xtce.xml`.
+
+| Parameter | Eng unit | Calibrator (raw→eng) | Warning (soft) | Critical (hard) |
+|---|---|---|---|---|
+| battery_voltage | V | × 0.001 | 7.2 – 8.4 | 6.8 – 8.6 |
+| battery_current | A | × 0.001 | 0.4 – 2.2 | 0.0 – 3.0 |
+| obc_temp | °C | × 0.01 | 0 – 50 | −20 – 80 |
+| battery_temp | °C | × 0.01 | 0 – 40 | −20 – 60 |
+| reaction_wheel_speed | RPM | × 1 | 1000 – 6000 | −8000 – 8000 |
+| spacecraft_mode | enum | 0=SAFE / 1=NOMINAL / 2=PAYLOAD | — | — |
+
+Calibrators are XTCE `PolynomialCalibrator`s (Yamcs has no `LinearCalibrator`);
+the HK container restricts on `SecHdrFlag=Present` + `APID=100`.
+
+**Verified live (2026-06-13):** a nominal stream decommutates to correct
+engineering values (e.g. battery_voltage 7.886 V, obc_temp 20.08 °C, RW 3062 RPM,
+mode NOMINAL), all `IN_LIMITS`, 0 alarms; the `obc_overtemp` anomaly drives
+obc_temp out of limits → an OOL alarm on `/SGS/obc_temp`. (Follow-up: the
+simulator clamps raw to the hard band, so over-temp lands at the warning/critical
+boundary as WARNING — let anomalies overshoot for a clean CRITICAL.)

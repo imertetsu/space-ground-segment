@@ -44,10 +44,17 @@ _Last updated: 2026-06-13 — Epic 1 CLOSED (on `main`); Epic 2 (control) Phase 
   **Verified:** live Yamcs ingested our HK stream (`udp-in` count advanced, no
   SHORT_PACKET); seq-jump warnings were only APID-100 collision with residual
   quickstart traffic (gone once our MDB replaces the quickstart's).
-- **Next: Phase 2 (MDB + decommutation + limits)** — replace the quickstart XTCE
-  with our mission MDB (the 6 HK params, raw→eng calibrators, soft/hard limits)
-  decoding APID 100 per ICD §2.5; Yamcs decommutates to engineering units; limit
-  checks raise OOL alarms on the injected anomalies. Run ONLY our simulator.
+- **Epic 2 / Phase 2 DONE** on `epic/control`: our XTCE MDB
+  (`control/yamcs/src/main/yamcs/mdb/xtce.xml`, SpaceSystem `SGS`, labelled
+  SIMULATED) replaces the quickstart's — decodes HK APID 100 to engineering units
+  (calibrators ×0.001/×0.01/×1, enum mode) with soft/hard limits (ICD §2.6).
+  **Verified live:** nominal stream → correct eng values, 0 alarms; `obc_overtemp`
+  anomaly → OOL alarm on `/SGS/obc_temp`. Container matches `SecHdrFlag=Present` +
+  `APID=100`.
+- **Next: Phase 3 (telecommanding)** — TC set in the MDB; build/validate/send a TC
+  via Yamcs UDP TC link; simulator accepts TCs + returns PUS-1 verification ACKs;
+  Yamcs tracks the verification chain; health + OOL alarms queryable (REQ-SIM-03,
+  REQ-TMC-04/05).
 
 ## Epic 1 (payload) — outcome
 
@@ -78,6 +85,9 @@ _Last updated: 2026-06-13 — Epic 1 CLOSED (on `main`); Epic 2 (control) Phase 
 - Wire the Data Store-provided checksum as the integrity expected digest.
 - Decode the real SLSTR `cloud_in`/`confidence_in`/`l2p_flags` bit semantics.
 - A `pdgs fetch` command for scene/AOI selection (currently a manual script).
+- (control) Anomalies clamp raw to the hard band → OOL lands at the
+  warning/critical boundary (WARNING). Let anomalies overshoot for a clean
+  CRITICAL alarm.
 
 ## Known gotchas
 
@@ -102,8 +112,8 @@ _Last updated: 2026-06-13 — Epic 1 CLOSED (on `main`); Epic 2 (control) Phase 
 
 ## Next step
 
-- **Epic 2 — Phase 2 (MDB + decommutation + limits):** write our XTCE MDB in
-  `control/yamcs/src/main/yamcs/mdb/` decoding HK APID 100 per ICD §2.5 (6 params,
-  raw→eng calibrators, soft/hard limits); point Yamcs at it (replacing the
-  quickstart MDB); verify decommutation to engineering units + OOL alarms on the
-  injected anomalies, running ONLY `control/simulator` (`sgs-sim`).
+- **Epic 2 — Phase 3 (telecommanding):** add a TC set to the XTCE MDB; via Yamcs,
+  build/validate/send a TC over the UDP TC link (:10025); the Python simulator
+  accepts TCs and returns PUS service-1 command-verification ACKs; Yamcs tracks
+  the verification chain; health state + OOL alarms remain queryable
+  (REQ-SIM-03, REQ-TMC-04/05).
