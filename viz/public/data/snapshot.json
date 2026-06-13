@@ -1,0 +1,113 @@
+{
+  "generated_at": "2026-06-13T22:29:48.761083Z",
+  "note": "Exported from the live shared catalogue by viz/tools/export_snapshot.py (read-only). Payload rows are REAL EUMETSAT products; control rows are SIMULATED Yamcs telemetry references; orbit comes from the REAL TLE.",
+  "platform": {
+    "name": "SENTINEL-3A",
+    "norad_id": 41335,
+    "tle_file": "data/sentinel3a.tle"
+  },
+  "catalogue": [
+    {
+      "entry_id": "S3A_SL_1_RBT____20260515T230350_L1",
+      "origin": "payload",
+      "simulated": false,
+      "product_type": "SL_1_RBT",
+      "status": "REGISTERED",
+      "sensing_time": "2026-05-15T23:03:50Z",
+      "ingest_time": "2026-05-16T01:00:00Z",
+      "reference": "data/S3A_SL_1_RBT____20260515T230350.SEN3",
+      "source_version": null,
+      "source_refs": [],
+      "detail": "payload product (REAL data) mirrored from PDGS SQLite catalogue (read-only)"
+    },
+    {
+      "entry_id": "S3A_SST_L2_DERIVED__20260515T230350",
+      "origin": "payload",
+      "simulated": false,
+      "product_type": "SST_L2_DERIVED",
+      "status": "VALIDATED",
+      "sensing_time": "2026-05-15T23:03:50Z",
+      "ingest_time": "2026-05-16T01:05:00Z",
+      "reference": "data/derived/S3A_SST_L2_DERIVED__20260515T230350.nc",
+      "source_version": "pdgs-sst-1.0",
+      "source_refs": [
+        "S3A_SL_1_RBT____20260515T230350_L1"
+      ],
+      "detail": "payload product (REAL data) mirrored from PDGS SQLite catalogue (read-only)"
+    },
+    {
+      "entry_id": "yamcs://myproject/parameters/SGS/obc_temp",
+      "origin": "control",
+      "simulated": true,
+      "product_type": "TM_ARCHIVE_REF",
+      "status": "ARCHIVED",
+      "sensing_time": null,
+      "ingest_time": "2026-06-13T22:29:47.494874Z",
+      "reference": "yamcs://myproject/parameters/SGS/obc_temp",
+      "source_version": "yamcs-mdb-SGS",
+      "source_refs": [
+        "/SGS/obc_temp"
+      ],
+      "detail": null
+    },
+    {
+      "entry_id": "yamcs://myproject/parameters/SGS/battery_voltage",
+      "origin": "control",
+      "simulated": true,
+      "product_type": "TM_ARCHIVE_REF",
+      "status": "ARCHIVED",
+      "sensing_time": null,
+      "ingest_time": "2026-06-13T22:29:47.530873Z",
+      "reference": "yamcs://myproject/parameters/SGS/battery_voltage",
+      "source_version": "yamcs-mdb-SGS",
+      "source_refs": [
+        "/SGS/battery_voltage"
+      ],
+      "detail": null
+    },
+    {
+      "entry_id": "yamcs://myproject/parameters/SGS/reaction_wheel_speed",
+      "origin": "control",
+      "simulated": true,
+      "product_type": "TM_ARCHIVE_REF",
+      "status": "ARCHIVED",
+      "sensing_time": null,
+      "ingest_time": "2026-06-13T22:29:47.566874Z",
+      "reference": "yamcs://myproject/parameters/SGS/reaction_wheel_speed",
+      "source_version": "yamcs-mdb-SGS",
+      "source_refs": [
+        "/SGS/reaction_wheel_speed"
+      ],
+      "detail": null
+    },
+    {
+      "entry_id": "yamcs://myproject/alarms/SGS/obc_temp/0",
+      "origin": "control",
+      "simulated": true,
+      "product_type": "OOL_ALARM_REF",
+      "status": "TRIGGERED",
+      "sensing_time": "2026-06-14T09:31:00Z",
+      "ingest_time": "2026-06-13T22:29:47.602870Z",
+      "reference": "yamcs://myproject/alarms/SGS/obc_temp/0",
+      "source_version": "yamcs-mdb-SGS",
+      "source_refs": [
+        "/SGS/obc_temp"
+      ],
+      "detail": "OOL (SIMULATED)"
+    }
+  ],
+  "anomalies": [
+    {
+      "anomaly_id": "yamcs://myproject/alarms/SGS/obc_temp/0",
+      "origin": "control",
+      "simulated": true,
+      "kind": "ool_alarm",
+      "severity": "WARNING",
+      "state": "OPEN",
+      "source_ref": "yamcs://myproject/alarms/SGS/obc_temp/0",
+      "opened_at": "2026-06-14T09:31:00Z",
+      "updated_at": "2026-06-14T09:31:00Z",
+      "detail": "obc_temp OOL (SIMULATED)"
+    }
+  ]
+}

@@ -74,18 +74,24 @@ pedagogical spine of the portfolio:
 > analogue of product out-of-range flagging.* The shared `anomaly` contract is
 > where both sides' "something is out of range" signals converge conceptually.
 
-## 4. 3D view design (Epic 4 — placeholder)
+## 4. 3D flow view (Epic 4 — implemented)
 
-> Brief placeholder; full design lands with Epic 4.
+`viz/` is a static **CesiumJS** read-only flow view (no build step, no backend; CDN
+libs). It ties the segments together on one screen — the Sentinel-3A platform, its
+payload products, and the control state — fed by a canned JSON snapshot of the
+shared catalogue (`viz/tools/export_snapshot.py` regenerates it read-only).
 
-- **Stack:** **CesiumJS** for the globe/scene; **satellite.js** for orbit
-  propagation (TLE/SGP4) of the Sentinel-3 platform.
-- **Read-only:** consumes read-only APIs or canned data; never writes to or
-  depends on the segments.
-- **Tiers — illustrative vs data-driven (must be labelled):**
-  - *Illustrative* — orbit track, ground-track geometry, scene footprints drawn
-    for context. Labelled **illustrative**.
-  - *Data-driven* — overlays derived from **real** payload products (e.g. SST
-    fields / matchup locations). Labelled as derived from real data.
-- Per SRD §5, simulated (control) and illustrative (viz) content is always
-  labelled as such; a simplification is never presented as operational.
+- **Stack:** **CesiumJS** (globe/scene, offline Natural Earth II imagery — no ion
+  token) + **satellite.js** (SGP4) propagating the **real** Sentinel-3A TLE
+  (Celestrak, NORAD 41335).
+- **Read-only consumer:** fetches `data/*.tle` + `data/snapshot.json` only; imports
+  no segment code (the exporter reads the shared catalogue/anomaly store read-only).
+  Nothing depends on `viz/`.
+- **Real / simulated / illustrative, always labelled (SRD §5):**
+  - *REAL* — payload products (EUMETSAT SLSTR L1/L2) + the orbit (real TLE + SGP4).
+  - *SIMULATED* — control telemetry references + OOL anomalies (Yamcs, Epic 2),
+    shown as `control-simulated`.
+  - *ILLUSTRATIVE* — scene footprint geometry (ellipses; the products are real, the
+    footprint shapes are not reprojected scene polygons).
+- A legend on screen states the three labels; a simplification is never presented as
+  operational. Run: `cd viz/public && python -m http.server 8095`.

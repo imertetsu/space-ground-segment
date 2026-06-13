@@ -159,6 +159,21 @@ sgs-ops overview
 - **Live control state** in `overview` requires Yamcs running; otherwise it degrades
   gracefully to a labelled "unavailable" note (the catalogue/anomaly view still works).
 
-## 3D view
+## 3D view (Epic 4)
 
-The 3D flow view is **Epic 4** — not yet built.
+`viz/` is a static **CesiumJS** read-only flow view (no build step / backend).
+
+```bash
+cd viz/public && python -m http.server 8095      # then open http://localhost:8095/
+```
+
+- Renders the **real** Sentinel-3A orbit (TLE + SGP4), illustrative scene footprints
+  for the payload products, and a cross-segment panel (catalogue + anomalies) from a
+  canned shared-catalogue snapshot — every item labelled real / simulated /
+  illustrative (SRD §5). No Cesium-ion token (offline Natural Earth II imagery).
+- Refresh the snapshot from the **live** shared catalogue (read-only):
+  ```bash
+  export PDGS_PG_DSN="postgresql://sgs:change-me@localhost:5432/sgs_catalogue"
+  shared/.venv/Scripts/python.exe viz/tools/export_snapshot.py
+  ```
+- `viz/` depends on no segment; it fetches `data/*.tle` + `data/snapshot.json` only.

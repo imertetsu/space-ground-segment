@@ -4,15 +4,15 @@
 > every epic, never endlessly appended. Cap ~150 lines. Read this first when
 > re-entering after a gap. Full methodology + conventions: `CLAUDE.md`.
 
-_Last updated: 2026-06-14 — Epics 1, 2 & 3 CLOSED on `main`. Next: Epic 4 (3D viz)._
+_Last updated: 2026-06-14 — ALL FOUR EPICS CLOSED on `main`. Portfolio complete._
 
 ## Stack snapshot
 
 - **Project:** "Mini Space Ground Segment" — portfolio ground segment: PDGS
   (payload) + FOS (control) + shared layers + 3D view. Built epic-by-epic.
-- **Done:** Epic 1 `payload/` (Python) · Epic 2 `control/` (Python sim + Yamcs) ·
-  Epic 3 `shared/` (unification — catalogue, anomaly, time, `sgs-ops` surface).
-  **Pending:** Epic 4 3D viz (`viz/`).
+- **Done (all four epics):** Epic 1 `payload/` (Python) · Epic 2 `control/` (Python
+  sim + Yamcs) · Epic 3 `shared/` (unification — catalogue, anomaly, time, `sgs-ops`
+  surface) · Epic 4 `viz/` (CesiumJS 3D flow view). **Pending:** none.
 - **Stack:** Python 3.11 (payload + simulator) · Java 17 + Yamcs (control) ·
   PostgreSQL (Epic 3) · CesiumJS (Epic 4) · Docker · CI: GitLab + GitHub Actions.
 - **Gates — payload** (`payload/`): ruff · `mypy --strict` 0 · pytest (141) ·
@@ -68,6 +68,23 @@ _Last updated: 2026-06-14 — Epics 1, 2 & 3 CLOSED on `main`. Next: Epic 4 (3D 
   defaults (CLI MVP surface; Postgres for new writes + SQLite stays offline;
   read-only Yamcs-REST bridge).
 
+## Epic 4 (3D viz) — outcome
+
+- `viz/` is a static **CesiumJS** read-only flow view (no build step / backend; CDN
+  libs, offline Natural Earth II imagery — **no Cesium-ion token**). It renders the
+  **real** Sentinel-3A orbit + ground track + sub-satellite point (TLE NORAD 41335
+  via satellite.js/SGP4), **illustrative** scene footprints per payload product
+  (click a product → fly to its footprint), and a cross-segment panel (catalogue +
+  anomalies) from a canned shared-catalogue snapshot. Every item labelled REAL /
+  SIMULATED / ILLUSTRATIVE (SRD §5); control rows `control-simulated`.
+- **Read-only consumer:** the app fetches `data/*.tle` + `data/snapshot.json` only,
+  imports no segment code; `viz/tools/export_snapshot.py` regenerates the snapshot
+  from the live shared catalogue read-only. Verified in a real browser (globe +
+  orbit + footprint selection render). ESCALATED viz decisions: adopted recommended
+  defaults (canned snapshot + exporter; token-free imagery; CesiumJS+satellite.js).
+- **Known note:** opened in a foreground tab the globe loads via the intro fly-to
+  (drives Cesium tile refinement); if ever un-textured, any camera drag forces it.
+
 ## Recent decisions worth remembering
 
 - Language = English; CI = GitLab + GitHub mirror; remote = **GitHub** `origin`
@@ -105,16 +122,20 @@ _Last updated: 2026-06-14 — Epics 1, 2 & 3 CLOSED on `main`. Next: Epic 4 (3D 
 - Requirements / interfaces / verification → `docs/srd`, `docs/icd`, `docs/svp-svr`
 - Operations → `docs/operations/operations-guide.md`
 - Code → `payload/`, `control/simulator/` (`sgs_sim`), `control/yamcs/`,
-  `shared/` (`sgs_shared` — catalogue/anomaly/time_service/bridges/`sgs-ops`) (+ READMEs)
+  `shared/` (`sgs_shared` — catalogue/anomaly/time_service/bridges/`sgs-ops`),
+  `viz/` (CesiumJS 3D flow view + `tools/export_snapshot.py`) (+ READMEs)
 
 ## Next step
 
-- **Epic 4 — 3D viz (`viz/`, CesiumJS):** read-only consumer rendering the flow view
-  over the shared catalogue + Yamcs REST (orbit track via satellite.js/SGP4; scene
-  footprints; data-driven overlays from REAL payload products). Write the ephemeral
-  spec first; phase-by-phase with a real browser check; control/illustrative content
-  labelled per SRD §5. Start: a planning agent writes `docs/specs/<epic4>.md`.
-- **Follow-up (non-blocking, payload):** wire the live `pdgs` CLI to optionally write
-  directly into the shared Postgres catalogue (today products reach the shared
-  catalogue via the read-only `sgs-ops sync-payload` SQLite bridge; default stays
-  SQLite for offline dev — the mapper + capability exist and are tested).
+- **All four epics are complete and on `main` (pushed to GitHub).** The portfolio is
+  done end-to-end: payload (real EUMETSAT SST + cal/val) · control (simulated
+  CCSDS/PUS → Yamcs) · shared unification (`sgs-ops`) · 3D flow view (`viz/`).
+- **Non-blocking follow-ups (future polish):**
+  - (payload) wire the live `pdgs` CLI to optionally write directly into the shared
+    Postgres catalogue (today products reach it via the read-only `sgs-ops
+    sync-payload` SQLite bridge; default stays SQLite for offline dev).
+  - (viz) optional live mode (read the Yamcs REST / a read-only HTTP API directly
+    instead of the canned snapshot); reproject real SLSTR scene polygons for true
+    footprints; richer flow animation.
+  - (control) let anomalies overshoot the hard band for a clean CRITICAL; custom
+    request-id-correlated command verifier; a live PUS-9 time report.
