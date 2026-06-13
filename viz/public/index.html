@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Mini Space Ground Segment — 3D Flow View</title>
+
+  <!--
+    Token-free CesiumJS app. No Cesium-ion token is required: window.CESIUM_BASE_URL
+    points at the CDN build's static assets (Workers/Assets/Widgets), and js/app.js
+    uses the offline Natural Earth II imagery bundled in the Cesium build (no ion/Bing
+    key, no external tile server).
+
+    Pinned CDN versions:
+      - CesiumJS    1.119  (https://cdn.jsdelivr.net/npm/cesium@1.119/Build/Cesium/)
+      - satellite.js 5.x   (SGP4 propagation of the REAL Sentinel-3A TLE)
+  -->
+
+  <!-- Cesium base URL must be set BEFORE Cesium.js loads so it can find its Workers/Assets. -->
+  <script>
+    window.CESIUM_BASE_URL = "https://cdn.jsdelivr.net/npm/cesium@1.119/Build/Cesium/";
+  </script>
+
+  <link rel="stylesheet"
+        href="https://cdn.jsdelivr.net/npm/cesium@1.119/Build/Cesium/Widgets/widgets.css" />
+  <link rel="stylesheet" href="css/style.css" />
+</head>
+<body>
+  <div id="cesiumContainer"></div>
+
+  <!-- Cross-segment side panel: shared-catalogue products + anomalies (canned snapshot). -->
+  <aside id="panel" aria-label="Cross-segment flow panel">
+    <header class="panel-head">
+      <h1>Mini Space Ground Segment</h1>
+      <p class="subtitle">3D flow view &mdash; satellite &rarr; payload &rarr; shared catalogue &larr; control</p>
+      <p id="platformLine" class="platform-line">Loading platform&hellip;</p>
+    </header>
+
+    <section class="panel-section" aria-labelledby="cat-h">
+      <h2 id="cat-h">Shared catalogue</h2>
+      <div id="catalogueList" class="list">Loading catalogue&hellip;</div>
+    </section>
+
+    <section class="panel-section" aria-labelledby="anom-h">
+      <h2 id="anom-h">Anomalies</h2>
+      <div id="anomalyList" class="list">Loading anomalies&hellip;</div>
+    </section>
+
+    <footer id="snapshotMeta" class="snapshot-meta"></footer>
+  </aside>
+
+  <!-- Legend: the three mandatory data-honesty labels (SRD §5). -->
+  <div id="legend" aria-label="Data honesty legend">
+    <span class="legend-title">Data honesty</span>
+    <span class="legend-item"><span class="tag tag-real">REAL</span> payload data &amp; TLE/SGP4 orbit</span>
+    <span class="legend-item"><span class="tag tag-sim">SIMULATED</span> control telemetry &amp; anomalies</span>
+    <span class="legend-item"><span class="tag tag-illus">ILLUSTRATIVE</span> scene footprint geometry</span>
+    <span class="legend-hint">Click a payload product to fly to its footprint.</span>
+  </div>
+
+  <!-- satellite.js (SGP4). Pinned to v5. Exposes the global `satellite`. -->
+  <script src="https://cdn.jsdelivr.net/npm/satellite.js@5.0.0/dist/satellite.min.js"></script>
+  <!-- CesiumJS. Pinned to 1.119. Exposes the global `Cesium`. -->
+  <script src="https://cdn.jsdelivr.net/npm/cesium@1.119/Build/Cesium/Cesium.js"></script>
+
+  <!-- App (ES module). Reads only data/*.tle + data/snapshot.json; no segment code. -->
+  <script type="module" src="js/app.js"></script>
+</body>
+</html>

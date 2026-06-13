@@ -61,4 +61,8 @@ data/
 *.nc
 *.zip
 !payload/fixtures/**
+# viz/ ships small canned, labelled artifacts (real TLE + shared-catalogue snapshot)
+# that the static app needs — track them despite the broad data/ rule above.
+!viz/public/data/
+!viz/public/data/**
 
