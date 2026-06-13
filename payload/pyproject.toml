@@ -67,10 +67,11 @@ markers = [
 root_package = "pdgs"
 
 [[tool.importlinter.contracts]]
-name = "PDGS layered architecture (cli > validation > processing > ingestion > catalogue > config)"
+name = "PDGS layered architecture (cli > operations > validation > processing > ingestion > catalogue > config)"
 type = "layers"
 layers = [
     "pdgs.cli",
+    "pdgs.operations",
     "pdgs.validation",
     "pdgs.processing",
     "pdgs.ingestion",

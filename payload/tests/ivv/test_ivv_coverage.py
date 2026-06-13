@@ -84,9 +84,11 @@ _REQ_TO_TESTS: dict[str, tuple[str, ...]] = {
     "REQ-CFG-01": ("test_config_processing.py::test_load_default_toml_exposes_config_version",),
     "REQ-CFG-02": ("test_process_scene.py::test_process_scene_writes_product_and_registers",),
     "REQ-CFG-03": ("test_reproducibility.py::test_rerun_is_reproducible",),
-    # Operations
-    "REQ-OPS-01": ("test_ingest_roundtrip.py::test_ingest_corrupt_download_routes_to_failed",),
-    "REQ-OPS-02": ("test_reproducibility.py::test_on_demand_reprocessing_refreshes_in_place",),
+    # Operations — operator-facing dead-letter inspection + reprocessing CLI surface
+    # (Phase 4). The dead-letter STATE transition is still exercised by the ingestion
+    # round-trip test; these point at the operator-facing operations-layer tests.
+    "REQ-OPS-01": ("test_operations.py::test_list_dead_letter_returns_failed_products",),
+    "REQ-OPS-02": ("test_operations.py::test_reprocess_derived_refreshes_record_in_place",),
     "REQ-OPS-03": ("test_cli.py::test_status_command_returns_zero",),
 }
 

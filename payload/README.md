@@ -31,5 +31,21 @@ src/pdgs/
 └── config/      versioned params, coefficients, thresholds (REQ-CFG)
 ```
 
-Dependency direction (enforced by `import-linter`): `cli → validation → processing
-→ ingestion → catalogue → config`.
+Dependency direction (enforced by `import-linter`): `cli → operations → validation
+→ processing → ingestion → catalogue → config`.
+
+## CLI (operator)
+
+Offline demo uses the synthetic fixtures + `config/fixture.toml`:
+
+```bash
+pdgs run --config config/fixture.toml   # ingest -> process -> validate (end-to-end)
+pdgs ingest                             # discover/download/verify/register fixtures
+pdgs process  --config config/fixture.toml
+pdgs validate --config config/fixture.toml
+pdgs status [--status STATUS] [--type TYPE]   # list catalogue (shows config_version)
+pdgs reprocess <product_id> [--validate]      # on-demand re-run
+pdgs dead-letter                              # list FAILED products
+```
+
+See `../docs/operations/operations-guide.md` for details and the real-data path.

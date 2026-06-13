@@ -4,7 +4,7 @@
 > every epic, never endlessly appended. Cap ~150 lines. Read this first when
 > re-entering the project after a gap. Full methodology lives in `CLAUDE.md`.
 
-_Last updated: 2026-06-13 — Epic 1 (payload), Phase 3 (IV&V + validation) complete (offline/mock)._
+_Last updated: 2026-06-13 — Epic 1 (payload) implementation COMPLETE on mock (Phases 0–4); awaiting close decision._
 
 ## Stack snapshot
 
@@ -54,11 +54,20 @@ _Last updated: 2026-06-13 — Epic 1 (payload), Phase 3 (IV&V + validation) comp
   `pytest --collect-only`), CLI `validate`. 107 tests; gates green; mypy 0.
   First validation run (fixtures): bias −0.0497 K, RMSE 0.0508 K, 100% within
   ±2 K, 1186 matchups → PASS (see SVR).
-- **Next: Phase 4 (operations + epic close)** — operator CLI for dead-letter
-  inspection + `reprocess` + richer status + a one-command `run` (ingest →
-  process → validate); finalize operations guide; **delete `docs/specs/payload.md`
-  in the epic's last commit**; merge `epic/payload` → `main`. (Real-data run
-  still gated on EUMETSAT credentials.)
+- **Epic 1 / Phase 4 DONE (offline/mock)** on `epic/payload`: new `operations`
+  layer (`reprocess.py`); operator CLI `run` (end-to-end ingest→process→validate),
+  `reprocess <id>`, `dead-letter`, enriched `status` (filters + per-product
+  config_version). Layering now `cli → operations → validation → processing →
+  ingestion → catalogue → config`. **127 tests**; gates green; mypy 0 (30 files).
+  Operations guide + payload README finalized.
+- **Epic 1 implementation COMPLETE on synthetic/mock data** (all 19 REQ exercised
+  & passing; IV&V gate green; end-to-end `pdgs run` PASSES). **Remaining = the
+  real-data activation only** (provide EUMETSAT creds → `pdgs run --config
+  config/default.toml`; see real-data TODOs below).
+- **Epic close pending a user checkpoint** (project brief: "checkpoint after each
+  epic"): on go-ahead, delete the ephemeral `docs/specs/payload.md` in the final
+  commit and merge `epic/payload` → `main`.
+- **Next (after close): Epic 2** — FOS control (Java + Yamcs + CCSDS/PUS sim).
 
 ## Recent decisions worth remembering
 
