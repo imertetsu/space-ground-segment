@@ -1,0 +1,71 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "pdgs"
+version = "0.0.0"
+description = "Payload Data Ground Segment (PDGS) — Sentinel-3 SLSTR L1->L2 (SST) processing & validation (Epic 1)."
+requires-python = ">=3.11"
+readme = "README.md"
+license = { text = "Proprietary" }
+dependencies = [
+    # Phase 0 skeleton intentionally has no runtime deps. The science stack
+    # (eumdac, xarray, netCDF4, numpy) is added in the ingestion/processing
+    # phases that actually need it — keeps Phase 0 gates fast and green.
+]
+
+[project.optional-dependencies]
+dev = [
+    "ruff>=0.5",
+    "mypy>=1.10",
+    "pytest>=8",
+    "import-linter>=2.0",
+]
+
+[project.scripts]
+pdgs = "pdgs.cli.main:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+pdgs = ["py.typed"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM", "RUF"]
+
+[tool.mypy]
+python_version = "3.11"
+strict = true
+mypy_path = "src"
+explicit_package_bases = true
+namespace_packages = true
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"
+markers = [
+    "ivv: IV&V verification-suite checks (REQ traceability / gating).",
+    "integration: integration tests on small committed fixtures.",
+]
+
+[tool.importlinter]
+root_package = "pdgs"
+
+[[tool.importlinter.contracts]]
+name = "PDGS layered architecture (cli > validation > processing > ingestion > catalogue > config)"
+type = "layers"
+layers = [
+    "pdgs.cli",
+    "pdgs.validation",
+    "pdgs.processing",
+    "pdgs.ingestion",
+    "pdgs.catalogue",
+    "pdgs.config",
+]

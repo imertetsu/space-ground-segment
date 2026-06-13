@@ -7,35 +7,33 @@ first. Keep it lean; let the spec, commits, and tests carry the detail.
 
 ## 0. Project parameters
 
-> **STATUS: PENDING the project prompt.** This is an intentional, stack-agnostic
-> initial setup. The values below are placeholders to be finalized when the real
-> project brief arrives. Do **not** scaffold stack-specific code, quality gates,
-> or architecture layers until these are pinned.
-
 | Parameter | Value |
 |---|---|
-| `PROJECT_NAME` | SpaceGroundSegment |
-| `ONE_LINE_PURPOSE` | _TBD — ground-segment (ground-based spacecraft ops) system; exact scope pending_ |
-| `STACK` | _TBD_ |
-| `ARCHITECTURE_STYLE` | _TBD_ (+ dependency-direction rule) |
-| `ARCH_ENFORCEMENT` | _TBD_ (tool that fails the build on a layering violation, or "manual review") |
-| `PRIMARY_LANGUAGE` (user-facing copy) | _TBD_ |
-| `MONETIZATION / TIERS` | _TBD_ |
-| `IMPLEMENTER DOMAINS` | _TBD_ (e.g. backend / frontend / infra) |
+| `PROJECT_NAME` | SpaceGroundSegment ("Mini Space Ground Segment") |
+| `ONE_LINE_PURPOSE` | A portfolio ground segment demonstrating both halves of satellite ops — PDGS (payload: real Sentinel-3 SLSTR L1→L2 + cal/val) and FOS (control: simulated CCSDS/PUS TM/TC via Yamcs) — unified by shared layers and a 3D flow view; engineered to read as operationally credible (EUMETSAT/ESA-style), with every simplification explicitly documented. |
+| `STACK` | Python 3.11+ (payload: eumdac, xarray, netCDF4, numpy) · Java + Yamcs, XTCE MIB (control) · PostgreSQL (shared catalogue) · CesiumJS + satellite.js / Three.js (3D viz) · Docker + docker-compose · CI: GitLab CI (canonical) + GitHub Actions (mirror). |
+| `ARCHITECTURE_STYLE` | Modular monorepo. Two bounded contexts — `payload/` (PDGS) and `control/` (FOS) — plus a shared cross-cutting layer `shared/` (time-service, catalogue, anomaly). `viz/` is a read-only consumer. **Dependency rule:** segments depend only on `shared/` contracts, **never on each other**; `viz/` consumes read-only APIs (or labelled canned data) only. Within `payload/` (Python), layered: `cli → (ingestion \| processing \| validation) → catalogue → config`. |
+| `ARCH_ENFORCEMENT` | `import-linter` (`lint-imports`) enforces the Python layering and fails the build on a violation. ArchUnit will guard the Java/control side (Epic 2). Cross-segment isolation is enforced by directory ownership + import-linter contracts. |
+| `PRIMARY_LANGUAGE` (user-facing copy) | **English** — all deliverables (docs, UI, code, commit messages). (Maintainer conversation may be Spanish; artifacts are English.) |
+| `MONETIZATION / TIERS` | n/a (portfolio project). |
+| `IMPLEMENTER DOMAINS` | `payload-developer` (Python, `payload/` + Python parts of `shared/`) · `control-developer` (Java/Yamcs + simulator, `control/`) · `viz-developer` (web, `viz/`). Created per-epic; only `payload-developer` exists today. |
 
-### Quality gates — PENDING
+### Quality gates
 
-Fill the exact commands once the stack is chosen, then wire them (§8 of the
-methodology) and record the type-check baseline here.
+Gates are per-segment. For **Epic 1 (payload, Python)** run from `payload/`:
 
-| Gate | Command | Baseline |
+| Gate | Command (run from `payload/`) | Baseline |
 |---|---|---|
-| lint | _TBD_ | — |
-| format | _TBD_ | — |
-| type-check | _TBD_ | _record error count here_ |
-| tests | _TBD_ | _list pre-existing failures here_ |
-| arch-check | _TBD_ | — |
-| build | _TBD_ | — |
+| lint | `ruff check .` | 0 errors (Phase 0) |
+| format | `ruff format --check .` | clean (Phase 0) |
+| type-check | `mypy src` | **0 errors** (recorded Phase 0, 2026-06-13) |
+| tests | `pytest` | 0 failures (Phase 0) |
+| arch-check | `lint-imports` | contracts kept (Phase 0) |
+| build | `docker compose build payload` (from repo root) | builds (Phase 0) |
+
+> Type-check baseline = **0 errors** under `mypy --strict` on the skeleton. Any new
+> mypy error vs this baseline blocks the phase. Update this table if the baseline
+> legitimately changes. Control (Java) and viz (web) gates are added with their epics.
 
 ---
 

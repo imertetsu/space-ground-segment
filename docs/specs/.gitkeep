@@ -1,3 +1,0 @@
-# Ephemeral epic specs live here, one per in-flight epic (docs/specs/<epic>.md).
-# Each is deleted in the epic's last commit. This .gitkeep keeps the dir tracked
-# while empty. There is no docs/archive/ — delete, don't hoard.

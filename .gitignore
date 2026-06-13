@@ -24,11 +24,38 @@ logs/
 tmp/
 .cache/
 
-# --- Build / dependency output (stack-specific entries added when stack is chosen) ---
+# --- Build / dependency output ---
 dist/
 build/
 out/
 coverage/
 
-# NOTE: language/framework-specific ignores (node_modules/, __pycache__/,
-# target/, venv/, etc.) will be appended once the stack is pinned.
+# --- Python ---
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+*.egg-info/
+.eggs/
+.mypy_cache/
+.ruff_cache/
+.pytest_cache/
+.coverage
+htmlcov/
+
+# --- Node / web (viz, Epic 4) ---
+node_modules/
+.next/
+.vite/
+
+# --- Java / Yamcs (control, Epic 2) ---
+target/
+*.class
+.gradle/
+
+# --- Data / products (never commit downloaded EO data; only tiny labelled fixtures) ---
+data/
+*.nc
+*.zip
+!payload/fixtures/**
+

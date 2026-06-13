@@ -1,0 +1,22 @@
+# Mini Space Ground Segment — service composition.
+#
+# Phase 0 (Epic 1) ships only the payload (PDGS) service. Other services are
+# added with their epics and kept as commented placeholders until then:
+#   - yamcs + simulator : Epic 2 (FOS / control)
+#   - postgres          : Epic 3 (shared catalogue)
+#   - viz               : Epic 4 (3D flow web app)
+
+services:
+  payload:
+    build:
+      context: ./payload
+      dockerfile: Dockerfile
+    image: sgs-payload:dev
+    # Phase 0: runs the operator CLI status and exits (no long-running process).
+    command: ["status"]
+
+  # --- Placeholders for later epics ---------------------------------------
+  # yamcs:        # Epic 2 — Yamcs mission control (CCSDS/PUS, XTCE MIB)
+  # simulator:    # Epic 2 — CCSDS/PUS spacecraft simulator (UDP/TCP -> yamcs)
+  # postgres:     # Epic 3 — shared catalogue (products + telemetry refs)
+  # viz:          # Epic 4 — 3D flow web app (CesiumJS + satellite.js)

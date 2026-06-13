@@ -4,20 +4,20 @@ Project agents for the SSS methodology (see `CLAUDE.md §2`). Each agent has a t
 set, a directory scope, and a "never touches" boundary. The main session
 orchestrates and owns verification — agents never commit.
 
-## Defined now (stack-agnostic)
+## Defined now
 
 | Agent | Writes? | Scope | Never touches |
 |---|---|---|---|
 | `prompt-engineer` | No (text out) | — reads only | Any file (Write/Edit not granted) |
-| `product-owner` | Yes | `docs/` only | Source, tests, build, CI |
+| `product-owner` | Yes | `docs/` only (not `HANDOFF.md`) | Source, tests, build, CI |
 | `architect` | No (text out) | — reads only | Any file (read-only planner) |
+| `payload-developer` | Yes | `payload/` (Python parts of `shared/` later) | `control/`, `viz/`, `docs/`, CLAUDE.md, CI |
 
-## Pending the stack/architecture decision
+## Pending their epic
 
-Implementer agents — one per IMPLEMENTER DOMAIN — are created once the stack and
-architecture are pinned (from the project prompt). Each will be scoped to its own
-directories and forbidden from crossing into another's territory. Expected shape
-(to be confirmed): e.g. `backend-developer`, `frontend-developer`, `infra`.
+Created when their epic starts and their territory exists:
+- `control-developer` — Java/Yamcs + simulator, scoped to `control/` (Epic 2).
+- `viz-developer` — web app, scoped to `viz/` (Epic 4).
 
 When creating an implementer agent, give it:
 - **Tools:** Read, Write, Edit, Glob, Grep, Bash (to run its own gates).

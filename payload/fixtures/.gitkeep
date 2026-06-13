@@ -1,0 +1,4 @@
+# Tiny, clipped, LABELLED test fixtures only (e.g. a small clipped SLSTR scene for
+# integration tests). Never commit full EO products — those are downloaded via
+# eumdac into data/ (gitignored). Fixtures here must be small and clearly marked
+# as test data, never presented as operational output.

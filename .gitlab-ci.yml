@@ -1,0 +1,59 @@
+# Canonical CI pipeline (GitLab CI), as required by the project brief.
+# A GitHub Actions mirror (.github/workflows/ci.yml) runs the same gates on the
+# GitHub remote. The IV&V verification stage is a HARD gate before build.
+#
+# Phase 0 covers the payload (Python) segment only. Control (Java/Yamcs) and viz
+# (web) jobs are added with their epics.
+
+stages:
+  - lint
+  - unit
+  - integration
+  - ivv-verification
+  - build
+
+default:
+  image: python:3.11-slim
+  before_script:
+    - cd payload
+    - pip install --no-cache-dir -e ".[dev]"
+
+lint:
+  stage: lint
+  script:
+    - ruff check .
+    - ruff format --check .
+
+type-check:
+  stage: lint
+  script:
+    - mypy src
+
+arch-check:
+  stage: lint
+  script:
+    - lint-imports
+
+unit:
+  stage: unit
+  script:
+    - pytest tests/unit
+
+integration:
+  stage: integration
+  script:
+    - pytest -m integration
+
+ivv-verification:
+  stage: ivv-verification
+  script:
+    - pytest -m ivv
+
+build-payload:
+  stage: build
+  image: docker:27
+  services:
+    - docker:27-dind
+  before_script: []
+  script:
+    - docker build -t sgs-payload:ci payload

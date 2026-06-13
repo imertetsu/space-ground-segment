@@ -1,0 +1,43 @@
+# GitHub Actions mirror of the canonical GitLab pipeline (.gitlab-ci.yml).
+# Same quality gates, same order; IV&V runs before the image build.
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  quality:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: payload
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: install
+        run: pip install --no-cache-dir -e ".[dev]"
+      - name: lint
+        run: ruff check .
+      - name: format
+        run: ruff format --check .
+      - name: type-check
+        run: mypy src
+      - name: arch-check
+        run: lint-imports
+      - name: unit
+        run: pytest tests/unit
+      - name: integration
+        run: pytest -m integration
+      - name: ivv-verification
+        run: pytest -m ivv
+
+  build:
+    runs-on: ubuntu-latest
+    needs: quality
+    steps:
+      - uses: actions/checkout@v4
+      - name: build payload image
+        run: docker build -t sgs-payload:ci payload
