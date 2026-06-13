@@ -352,3 +352,25 @@ anomaly recorded into the shared store and listed together by `sgs-ops anomalies
 (each labelled); `ack` advanced the payload one OPEN→ACKNOWLEDGED; `start_reprocess`
 succeeded on the payload anomaly (→REPROCESSING) and was rejected on the control
 anomaly. 62 shared tests pass, `lint-imports` KEPT.
+
+### 3.4 Shared time service — FROZEN (Phase 3, REQ-INT-01)
+
+One UTC base both halves stamp/compare against, plus OBT↔UTC correlation.
+
+- **Shared base = UTC** (tz-aware ISO-8601). Payload products already carry UTC;
+  control telemetry **references** carry UTC (bridge ingest/trigger times). Every
+  catalogue/anomaly row stores `timestamptz` (UTC) — so rows from both halves sort
+  and compare on one base.
+- **`TimeCorrelation` (frozen):** linear model `utc = utc_at_epoch + rate·(obt −
+  obt_epoch)` — `obt_epoch` (s), `utc_at_epoch` (UTC), `rate` (UTC s per OBT s;
+  `1.0` ideal, off-1.0 = drift; non-zero).
+- **API:** `obt_to_utc(obt, corr=None)`, `utc_to_obt(utc, corr=None)` (default =
+  `default_correlation()`); `MISSION_EPOCH_UTC` = `2026-01-01T00:00:00Z`.
+- **DOCUMENTED SIMPLIFICATION (PUS-9 seed):** the simulator emits no PUS time field
+  and Yamcs stamps wall-clock, so there is no live service-9 report;
+  `default_correlation()` returns a **seeded** pair (OBT 0 s ↔ `MISSION_EPOCH_UTC`,
+  `rate=1.0`) — a labelled seed, NOT an operational correlation. Callers with a real
+  pair pass their own `TimeCorrelation`.
+
+**Verified (2026-06-13):** OBT↔UTC round-trips exactly under the default and custom
+(incl. drift `rate≠1.0`) correlations; 70 shared tests pass.
