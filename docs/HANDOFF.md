@@ -4,7 +4,7 @@
 > every epic, never endlessly appended. Cap ~150 lines. Read this first when
 > re-entering the project after a gap. Full methodology lives in `CLAUDE.md`.
 
-_Last updated: 2026-06-13 — Epic 1 (payload), Phase 2 (processing chain) complete (offline/mock)._
+_Last updated: 2026-06-13 — Epic 1 (payload), Phase 3 (IV&V + validation) complete (offline/mock)._
 
 ## Stack snapshot
 
@@ -46,9 +46,19 @@ _Last updated: 2026-06-13 — Epic 1 (payload), Phase 2 (processing chain) compl
 - **Decision (user):** build payload with **mock data now**, switch to real data
   when the API key arrives. Real-data run is the only remaining gate to true
   "Epic 1 done".
-- **Next: Phase 3 (IV&V + validation)** — co-locate derived SST vs official L2,
-  stats (bias/RMSE/std/match%/count), threshold gate, report + difference plot.
-  Unblocked (consumes the frozen DerivedSstProduct + L2Reference).
+- **Epic 1 / Phase 3 DONE (offline/mock)** on `epic/payload`: validation
+  (KDTree NN co-location + quality filter, bias/RMSE/std/%within stats, FROZEN
+  `ValidationResult`, threshold gate → non-zero exit, Markdown report +
+  difference.png + validation.json), versioned `[validation]` thresholds, real
+  **IV&V coverage suite** (all 19 REQ → collectable passing test, enforced via
+  `pytest --collect-only`), CLI `validate`. 107 tests; gates green; mypy 0.
+  First validation run (fixtures): bias −0.0497 K, RMSE 0.0508 K, 100% within
+  ±2 K, 1186 matchups → PASS (see SVR).
+- **Next: Phase 4 (operations + epic close)** — operator CLI for dead-letter
+  inspection + `reprocess` + richer status + a one-command `run` (ingest →
+  process → validate); finalize operations guide; **delete `docs/specs/payload.md`
+  in the epic's last commit**; merge `epic/payload` → `main`. (Real-data run
+  still gated on EUMETSAT credentials.)
 
 ## Recent decisions worth remembering
 

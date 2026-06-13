@@ -35,3 +35,14 @@ def default_download_dir() -> Path:
     dest = data_dir() / "products"
     dest.mkdir(parents=True, exist_ok=True)
     return dest
+
+
+def default_reports_dir(derived_product_id: str) -> Path:
+    """Return the (gitignored) reports directory for a derived product's validation.
+
+    Validation artefacts (``validation.json``, the Markdown report, the difference
+    plot) live under ``<data root>/reports/<derived_product_id>/``.
+    """
+    dest = data_dir() / "reports" / derived_product_id
+    dest.mkdir(parents=True, exist_ok=True)
+    return dest

@@ -20,7 +20,7 @@ This is the foundation ``config`` layer: it imports no other PDGS package.
 from __future__ import annotations
 
 import tomllib
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 
 
@@ -67,16 +67,43 @@ class CloudScreeningConfig:
 
 
 @dataclass(frozen=True)
+class ValidationConfig:
+    """Acceptance thresholds for derived-vs-official L2 validation (FROZEN — Phase 3).
+
+    These freeze the Phase 3 gate (REQ-VAL-03) and the reference-quality filter for
+    co-location (REQ-VAL-01). Defaults are the proposed thresholds in the Epic 1
+    spec §7 (PROPOSED BY AGENT — tunable, pending owner sign-off); they are loaded
+    from a ``[validation]`` TOML section so a run can override them.
+
+    * ``tolerance_k`` — |derived - official| at/under which a pair "agrees".
+    * ``max_abs_bias_k`` — max acceptable |mean(derived - official)|.
+    * ``max_rmse_k`` — max acceptable RMSE of the differences.
+    * ``min_pct_within_tol`` — min % of matched pairs within ``tolerance_k`` (0-100).
+    * ``min_match_count`` — min number of co-located pairs for a conclusive run.
+    * ``min_quality_level`` — compare only where reference ``quality_level`` >= this.
+    """
+
+    tolerance_k: float = 2.0
+    max_abs_bias_k: float = 1.0
+    max_rmse_k: float = 1.5
+    min_pct_within_tol: float = 90.0
+    min_match_count: int = 100
+    min_quality_level: int = 3
+
+
+@dataclass(frozen=True)
 class ProcessingConfig:
     """Top-level versioned processing configuration (FROZEN).
 
     ``config_version`` is recorded in every derived product's provenance
-    (REQ-CFG-01/02). Bundles the SST and cloud-screening sub-configs.
+    (REQ-CFG-01/02). Bundles the SST and cloud-screening sub-configs, plus the
+    Phase 3 validation thresholds (``validation``).
     """
 
     config_version: str
     sst: SstConfig
     cloud: CloudScreeningConfig
+    validation: ValidationConfig = field(default_factory=ValidationConfig)
 
 
 # --- Built-in fallback ------------------------------------------------------
@@ -118,6 +145,7 @@ def default_config() -> ProcessingConfig:
             bt_cloud_threshold_k=270.0,
             use_l1_cloud_flag=True,
         ),
+        validation=ValidationConfig(),
     )
 
 
@@ -150,6 +178,12 @@ def _as_bool(value: object, key: str) -> bool:
     return value
 
 
+def _as_int(value: object, key: str) -> int:
+    if isinstance(value, bool) or not isinstance(value, int):
+        raise ConfigError(f"config key {key!r} must be an integer, got {type(value).__name__}")
+    return value
+
+
 def _parse_sst(table: dict[str, object]) -> SstConfig:
     return SstConfig(
         coefficient_set_id=_as_str(
@@ -176,11 +210,54 @@ def _parse_cloud(table: dict[str, object]) -> CloudScreeningConfig:
     )
 
 
+def _parse_validation(table: dict[str, object]) -> ValidationConfig:
+    """Parse a ``[validation]`` table into a :class:`ValidationConfig`.
+
+    Every key is optional; an absent key keeps the :class:`ValidationConfig`
+    default (the spec §7 proposed threshold).
+    """
+    defaults = ValidationConfig()
+    return ValidationConfig(
+        tolerance_k=(
+            _as_float(table["tolerance_k"], "tolerance_k")
+            if "tolerance_k" in table
+            else defaults.tolerance_k
+        ),
+        max_abs_bias_k=(
+            _as_float(table["max_abs_bias_k"], "max_abs_bias_k")
+            if "max_abs_bias_k" in table
+            else defaults.max_abs_bias_k
+        ),
+        max_rmse_k=(
+            _as_float(table["max_rmse_k"], "max_rmse_k")
+            if "max_rmse_k" in table
+            else defaults.max_rmse_k
+        ),
+        min_pct_within_tol=(
+            _as_float(table["min_pct_within_tol"], "min_pct_within_tol")
+            if "min_pct_within_tol" in table
+            else defaults.min_pct_within_tol
+        ),
+        min_match_count=(
+            _as_int(table["min_match_count"], "min_match_count")
+            if "min_match_count" in table
+            else defaults.min_match_count
+        ),
+        min_quality_level=(
+            _as_int(table["min_quality_level"], "min_quality_level")
+            if "min_quality_level" in table
+            else defaults.min_quality_level
+        ),
+    )
+
+
 def load_config(path: str | Path) -> ProcessingConfig:
     """Load a :class:`ProcessingConfig` from a TOML file (REQ-CFG-01).
 
     The file must define a top-level ``config_version`` plus ``[sst]`` and
     ``[cloud]`` tables matching :class:`SstConfig` / :class:`CloudScreeningConfig`.
+    An optional ``[validation]`` table overrides the Phase 3 acceptance thresholds
+    (:class:`ValidationConfig`); when absent, the proposed spec §7 defaults apply.
     Raises :class:`ConfigError` on a missing/ill-typed key and
     :class:`FileNotFoundError` if ``path`` does not exist.
     """
@@ -199,8 +276,13 @@ def load_config(path: str | Path) -> ProcessingConfig:
     if not isinstance(cloud_raw, dict):
         raise ConfigError("config section [cloud] must be a table")
 
+    validation_raw = raw.get("validation", {})
+    if not isinstance(validation_raw, dict):
+        raise ConfigError("config section [validation] must be a table")
+
     return ProcessingConfig(
         config_version=config_version,
         sst=_parse_sst(sst_raw),
         cloud=_parse_cloud(cloud_raw),
+        validation=_parse_validation(validation_raw),
     )

@@ -31,3 +31,17 @@ valid_max_k = 310.0
 # fixture pixel so it never fires, exercising the flag-based path deterministically.
 bt_cloud_threshold_k = 250.0
 use_l1_cloud_flag = true
+
+[validation]
+# Phase 3 acceptance thresholds for the OFFLINE SYNTHETIC demo (REQ-VAL-03).
+# Same proposed bounds as config/default.toml (spec §7). With the FIXTURE-ONLY
+# coefficients the derived SST recovers the synthetic WST, so a fixture run PASSES
+# comfortably; this section also lets the IV&V/integration tests trip the gate by
+# injecting a degraded derived field. The 30x40 fixture grid yields ~1186 clear
+# matchups (>= min_match_count). SYNTHETIC inputs — never operational.
+tolerance_k = 2.0
+max_abs_bias_k = 1.0
+max_rmse_k = 1.5
+min_pct_within_tol = 90.0
+min_match_count = 100
+min_quality_level = 3

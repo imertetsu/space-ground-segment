@@ -40,3 +40,15 @@ valid_max_k = 310.0
 # warm sea. Combined (OR) with the L1 cloud flag when use_l1_cloud_flag = true.
 bt_cloud_threshold_k = 270.0
 use_l1_cloud_flag = true
+
+[validation]
+# Phase 3 acceptance thresholds for derived SST vs official SL_2_WST (REQ-VAL-03).
+# PROPOSED BY AGENT (Epic 1 spec §7) — deliberately lenient because the derived
+# SST uses a simplified split-window + nearest-neighbour co-location. Tunable;
+# pending owner sign-off. A run outside these bounds fails the CI gate.
+tolerance_k = 2.0          # |derived - official| at/under which a pair "agrees"
+max_abs_bias_k = 1.0       # max |mean(derived - official)|
+max_rmse_k = 1.5           # max RMSE of differences
+min_pct_within_tol = 90.0  # min % of matched pairs within tolerance_k
+min_match_count = 100      # below this the run is inconclusive, not a pass
+min_quality_level = 3      # compare only where reference quality_level >= this
