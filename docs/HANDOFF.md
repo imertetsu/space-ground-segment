@@ -4,7 +4,7 @@
 > every epic, never endlessly appended. Cap ~150 lines. Read this first when
 > re-entering the project after a gap. Full methodology lives in `CLAUDE.md`.
 
-_Last updated: 2026-06-13 — Epic 1 (payload) implementation COMPLETE on mock (Phases 0–4); awaiting close decision._
+_Last updated: 2026-06-13 — Epic 1 (payload) COMPLETE incl. REAL-data validation (PASS); awaiting epic-close decision._
 
 ## Stack snapshot
 
@@ -60,13 +60,20 @@ _Last updated: 2026-06-13 — Epic 1 (payload) implementation COMPLETE on mock (
   config_version). Layering now `cli → operations → validation → processing →
   ingestion → catalogue → config`. **127 tests**; gates green; mypy 0 (30 files).
   Operations guide + payload README finalized.
-- **Epic 1 implementation COMPLETE on synthetic/mock data** (all 19 REQ exercised
-  & passing; IV&V gate green; end-to-end `pdgs run` PASSES). **Remaining = the
-  real-data activation only** (provide EUMETSAT creds → `pdgs run --config
-  config/default.toml`; see real-data TODOs below).
+- **Real-data activation DONE (2026-06-13)** on `epic/payload`: real EUMETSAT
+  auth + `eumdac` search/download work; fixed real path (zip→`.SEN3` extract with
+  Windows MAX_PATH-safe hashed subdir; `read_l2_wst` globs the GHRSST netCDF +
+  squeezes `time`; `search` gains geo/timeliness/limit; co-location bbox subset
+  for full-scene scale). **141 tests**; gates green; mypy 0 (30 files). **REAL
+  validation run PASS:** real S3A SLSTR L1 vs official L2 WST → 330,274 matchups,
+  bias −0.85 K, RMSE 1.22 K, 91.6% within ±2 K (see SVR). Real cloud screening =
+  BT threshold only (`use_l1_cloud_flag=false` in default.toml; real `cloud_in`
+  bit semantics TBD).
+- **Epic 1 is functionally COMPLETE** (mock + real). All 19 REQ pass; IV&V gate
+  green; end-to-end `pdgs run` PASSES on fixtures; real validation PASSES.
 - **Epic close pending a user checkpoint** (project brief: "checkpoint after each
   epic"): on go-ahead, delete the ephemeral `docs/specs/payload.md` in the final
-  commit and merge `epic/payload` → `main`.
+  commit, prune this HANDOFF, and merge `epic/payload` → `main`.
 - **Next (after close): Epic 2** — FOS control (Java + Yamcs + CCSDS/PUS sim).
 
 ## Recent decisions worth remembering
@@ -84,14 +91,17 @@ _Last updated: 2026-06-13 — Epic 1 (payload) implementation COMPLETE on mock (
 - SST split-window **coefficient source is a real TBD** for Phase 2 — must cite a
   public reference; do not invent coefficients.
 
-## Real-data path TODOs (when EUMETSAT credentials arrive)
+## Real-data follow-ups (working, but to improve later)
 
-- `EumdacClient.download` currently writes the product stream to a single path;
-  real `SL_1_RBT`/`SL_2_WST` arrive as **zipped SAFE** → add unzip-to-folder.
+- DONE: zip→`.SEN3` extraction; WST netCDF located by glob; `search` geo/NTC/limit;
+  co-location bbox subset for scale.
 - Integrity check in `ingest` is a self-consistency sha256 (no external expected
-  digest offline); wire the Data Store-provided checksum as the expected value.
-- Confirm the real `SL_2_WST` internal netCDF filename (synthetic uses `L2P.nc`;
-  `read_l2_wst` keys on it) and the real scale/offset + flag bit semantics.
+  digest); wire the Data Store-provided checksum/MD5 as the expected value.
+- Confirm + decode the real `cloud_in`/`confidence_in`/`l2p_flags` bit semantics
+  (real cloud screening currently uses the S8 BT threshold only).
+- Scene/AOI selection is manual (a script); could be a `pdgs fetch` command.
+- Real EO data + reports live under `data/` and `D:/sgs` (gitignored / scratch) —
+  safe to delete to reclaim disk; regenerate with creds.
 
 ## Known gotchas
 
@@ -116,8 +126,6 @@ _Last updated: 2026-06-13 — Epic 1 (payload) implementation COMPLETE on mock (
 
 ## Next step
 
-- Provide EUMETSAT Data Store credentials to unblock Phase 1 live ingestion, OR
-  start Phase 1 design now: freeze the **catalogue schema** + **L1-reader
-  contract** (the freeze points that let Phase 2's two processors run in
-  parallel), delegating implementation to `payload-developer`. Main verifies
-  gates + diff, commits per phase.
+- **Close Epic 1** (awaiting user OK): delete `docs/specs/payload.md`, prune this
+  HANDOFF to a lean snapshot, merge `epic/payload` → `main`. Then **Epic 2** (FOS
+  control: Java + Yamcs + CCSDS/PUS simulator).

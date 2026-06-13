@@ -17,9 +17,14 @@ downloads later is a credential + flag change, not a code change at call sites.
 
 from __future__ import annotations
 
+import hashlib
+import itertools
 import os
 import shutil
+import tempfile
+import zipfile
 from abc import ABC, abstractmethod
+from collections.abc import Iterable, Iterator
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
@@ -80,6 +85,41 @@ class DataStoreClient(ABC):
 def has_credentials() -> bool:
     """Return ``True`` if both EUMETSAT credential env vars are set and non-empty."""
     return bool(os.environ.get(CONSUMER_KEY_ENV)) and bool(os.environ.get(CONSUMER_SECRET_ENV))
+
+
+def _matches_timeliness(product_id: str, timeliness: str | None) -> bool:
+    """Return ``True`` if ``product_id`` carries the ``_<timeliness>_`` token.
+
+    Sentinel-3 product ids embed the timeliness as a delimited token, e.g.
+    ``..._NT_...`` (NTC, what the PDGS wants) or ``..._NR_...`` (NRT). A ``None``
+    timeliness disables the filter (everything matches).
+    """
+    if timeliness is None:
+        return True
+    return f"_{timeliness}_" in product_id
+
+
+def _filter_product_ids(product_ids: Iterable[str], timeliness: str | None) -> Iterator[str]:
+    """Yield only the product ids matching ``timeliness`` (pure, testable helper)."""
+    return (pid for pid in product_ids if _matches_timeliness(pid, timeliness))
+
+
+def _find_safe_dir(extracted_root: Path) -> Path:
+    """Return the inner ``*.SEN3`` SAFE directory under an extracted product tree.
+
+    Real products extract to a tree that contains a ``<product_id>.SEN3/`` folder
+    (the SAFE dir holding the netCDFs), possibly nested below intermediate folders.
+    The shallowest ``*.SEN3`` directory found is returned.
+    """
+    if extracted_root.is_dir() and extracted_root.suffix == ".SEN3":
+        return extracted_root
+    candidates = sorted(
+        (p for p in extracted_root.rglob("*.SEN3") if p.is_dir()),
+        key=lambda p: len(p.relative_to(extracted_root).parts),
+    )
+    if not candidates:
+        raise IngestionError(f"no .SEN3 SAFE directory found under: {extracted_root}")
+    return candidates[0]
 
 
 def make_client(
@@ -194,12 +234,34 @@ class EumdacClient(DataStoreClient):
         collection_id: str,
         start: datetime,
         end: datetime,
+        *,
+        geo: str | None = None,
+        timeliness: str | None = None,
+        limit: int | None = None,
         **kw: Any,
     ) -> list[ProductRef]:
+        """Discover products, honouring optional AOI / timeliness / limit filters.
+
+        * ``geo`` — a WKT polygon passed straight to ``eumdac`` as a spatial filter.
+        * ``timeliness`` — keep only products whose id carries ``_<timeliness>_``
+          (e.g. ``"NT"`` for NTC); applied client-side after the eumdac search.
+        * ``limit`` — cap the number of returned refs (applied to the filtered
+          stream so the cap counts kept products).
+        """
         collection = self._datastore.get_collection(collection_id)
-        results = collection.search(dtstart=start, dtend=end, **kw)
+        search_kw: dict[str, Any] = dict(kw)
+        if geo is not None:
+            search_kw["geo"] = geo
+        results = collection.search(dtstart=start, dtend=end, **search_kw)
+
+        kept: Iterator[Any] = (
+            product for product in results if _matches_timeliness(str(product), timeliness)
+        )
+        if limit is not None:
+            kept = itertools.islice(kept, limit)
+
         refs: list[ProductRef] = []
-        for product in results:
+        for product in kept:
             refs.append(
                 ProductRef(
                     product_id=str(product),
@@ -212,14 +274,38 @@ class EumdacClient(DataStoreClient):
         return refs
 
     def download(self, ref: ProductRef, dest_dir: Path) -> Path:
+        """Download ``ref`` as a zip, extract it, and return the inner SAFE dir.
+
+        Real ``SL_1_RBT`` / ``SL_2_WST`` products arrive as a zip whose extraction
+        yields a ``<product_id>.SEN3/`` SAFE directory (containing the netCDFs)
+        alongside the manifest/browse files. The product stream is written to a
+        temporary ``.zip``, extracted into ``dest_dir``, the temp zip removed, and
+        the resolved ``*.SEN3`` directory returned (matching the offline client's
+        contract of returning a local SAFE folder).
+        """
         product = self._datastore.get_product(
             collection_id=ref.collection_id, product_id=ref.product_id
         )
         dest_dir.mkdir(parents=True, exist_ok=True)
-        dest = dest_dir / ref.product_id
-        with product.open() as src, open(dest, "wb") as out:
-            shutil.copyfileobj(src, out)
-        return dest
+        # Extract into a SHORT per-product subdir (hashed) — the product id already
+        # ends in ".SEN3" and the zip contains a "<id>.SEN3/" folder, so extracting
+        # under the id would double-nest and blow past the Windows MAX_PATH (260).
+        extract_root = dest_dir / hashlib.sha1(ref.product_id.encode("utf-8")).hexdigest()[:10]
+        if extract_root.exists():
+            shutil.rmtree(extract_root)
+        extract_root.mkdir(parents=True)
+
+        fd, tmp_zip_name = tempfile.mkstemp(suffix=".zip", dir=dest_dir)
+        tmp_zip = Path(tmp_zip_name)
+        try:
+            with os.fdopen(fd, "wb") as out, product.open() as src:
+                shutil.copyfileobj(src, out)
+            with zipfile.ZipFile(tmp_zip) as zf:
+                zf.extractall(extract_root)
+        finally:
+            tmp_zip.unlink(missing_ok=True)
+
+        return _find_safe_dir(extract_root)
 
 
 def _default_fixtures_dir() -> Path:

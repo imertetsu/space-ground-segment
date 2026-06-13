@@ -163,3 +163,50 @@ def test_empty_when_no_reference_passes_quality() -> None:
     reference = _reference(ref_sst, quality, lat, lon)
     matchups = colocate(derived, reference, ValidationConfig(min_quality_level=3))
     assert matchups.count == 0
+
+
+def test_reference_outside_derived_bbox_is_not_matched() -> None:
+    # Derived field is a small patch near (0..1, 10..11). The reference grid is much
+    # larger and includes far-away pixels; the bbox subset must exclude those so no
+    # derived pixel matches a spurious far reference.
+    der_lat, der_lon = _grid(4, 4)
+    der_sst = np.full((4, 4), 291.0, dtype=np.float32)
+    derived = _derived(der_sst, der_lat, der_lon)
+
+    # Reference: one near pixel (inside the derived bbox) at a distinct value, plus
+    # a block of far pixels (10 degrees away) which must never be matched.
+    ref_lat = np.array(
+        [[0.5, 50.0, 50.0], [0.5, 50.0, 50.0]],
+        dtype=np.float32,
+    )
+    ref_lon = np.array(
+        [[10.5, 80.0, 80.0], [10.5, 80.0, 80.0]],
+        dtype=np.float32,
+    )
+    ref_sst = np.array(
+        [[290.0, 200.0, 200.0], [290.0, 200.0, 200.0]],
+        dtype=np.float32,
+    )
+    quality = np.full((2, 3), 5, dtype=np.int32)
+    reference = _reference(ref_sst, quality, ref_lat, ref_lon)
+
+    matchups = colocate(derived, reference, ValidationConfig(min_match_count=1))
+    # All 16 derived pixels match the near reference (290.0); none the far 200.0.
+    assert matchups.count == 16
+    assert np.allclose(matchups.reference_k, 290.0)
+
+
+def test_empty_when_no_reference_inside_bbox() -> None:
+    # Reference entirely outside the derived bbox (+0.5 deg margin) -> no matchups.
+    der_lat, der_lon = _grid(3, 3)
+    der_sst = np.full((3, 3), 291.0, dtype=np.float32)
+    derived = _derived(der_sst, der_lat, der_lon)
+
+    far_lat = np.full((2, 2), 60.0, dtype=np.float32)
+    far_lon = np.full((2, 2), 90.0, dtype=np.float32)
+    ref_sst = np.full((2, 2), 290.0, dtype=np.float32)
+    quality = np.full((2, 2), 5, dtype=np.int32)
+    reference = _reference(ref_sst, quality, far_lat, far_lon)
+
+    matchups = colocate(derived, reference, ValidationConfig(min_match_count=1))
+    assert matchups.count == 0

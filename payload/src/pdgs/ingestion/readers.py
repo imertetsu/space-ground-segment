@@ -77,7 +77,9 @@ class L1Scene:
             ) from exc
         path = self.safe_dir / filename
         with xr.open_dataset(path, mask_and_scale=True) as ds:
-            data = ds[var].to_numpy()
+            # squeeze() drops any singleton dims (no-op for 2D fixtures, robust
+            # against real products carrying a leading singleton dimension).
+            data = ds[var].squeeze().to_numpy()
         return cast(npt.NDArray[np.float32], np.asarray(data, dtype=np.float32))
 
 
@@ -116,12 +118,20 @@ def read_l1_rbt(safe_dir: str | Path, view: str = "nadir") -> L1Scene:
 
     geo_file, lat_var, lon_var = _L1_GEO_FILE
     with xr.open_dataset(safe / geo_file, mask_and_scale=True) as ds:
-        latitudes: npt.NDArray[np.float32] = np.asarray(ds[lat_var].to_numpy(), dtype=np.float32)
-        longitudes: npt.NDArray[np.float32] = np.asarray(ds[lon_var].to_numpy(), dtype=np.float32)
+        # squeeze() drops any singleton dims (a no-op for the 2D fixtures, robust
+        # against real products that may carry a leading singleton dimension).
+        latitudes: npt.NDArray[np.float32] = np.asarray(
+            ds[lat_var].squeeze().to_numpy(), dtype=np.float32
+        )
+        longitudes: npt.NDArray[np.float32] = np.asarray(
+            ds[lon_var].squeeze().to_numpy(), dtype=np.float32
+        )
 
     flags_file, cloud_var = _L1_FLAGS_FILE
     with xr.open_dataset(safe / flags_file, mask_and_scale=False) as ds:
-        cloud_flags: npt.NDArray[np.int32] = np.asarray(ds[cloud_var].to_numpy(), dtype=np.int32)
+        cloud_flags: npt.NDArray[np.int32] = np.asarray(
+            ds[cloud_var].squeeze().to_numpy(), dtype=np.int32
+        )
 
     start, end, _ = fixture_metadata(safe)
     return L1Scene(
@@ -136,19 +146,48 @@ def read_l1_rbt(safe_dir: str | Path, view: str = "nadir") -> L1Scene:
     )
 
 
+def _find_wst_measurement(safe_dir: Path) -> Path:
+    """Return the GHRSST measurement netCDF inside an ``SL_2_WST`` SAFE folder.
+
+    Real ``SL_2_WST`` products name the measurement netCDF with a long
+    timestamp/version string (NOT ``L2P.nc``), so the file is located by globbing
+    ``*.nc`` and picking the one whose variables include ``sea_surface_temperature``.
+    The synthetic fixture's ``L2P.nc`` is found the same way.
+    """
+    candidates = sorted(safe_dir.glob("*.nc"))
+    if not candidates:
+        raise FileNotFoundError(f"no .nc measurement file found in SAFE folder: {safe_dir}")
+    for path in candidates:
+        with xr.open_dataset(path, mask_and_scale=False, decode_times=False) as ds:
+            if "sea_surface_temperature" in ds.variables:
+                return path
+    raise FileNotFoundError(
+        f"no .nc file with a 'sea_surface_temperature' variable in SAFE folder: {safe_dir}"
+    )
+
+
 def read_l2_wst(safe_dir: str | Path) -> L2Reference:
-    """Read an ``SL_2_WST`` SAFE folder into an :class:`L2Reference` (SST in K)."""
+    """Read an ``SL_2_WST`` SAFE folder into an :class:`L2Reference` (SST in K).
+
+    The measurement netCDF is located by content (the file carrying a
+    ``sea_surface_temperature`` variable), since real GHRSST products name it with a
+    timestamp/version string rather than a fixed ``L2P.nc``. Singleton dimensions
+    (real products carry a leading ``time=1``) are squeezed out; this is a no-op for
+    the 2D synthetic fixture.
+    """
     safe = Path(safe_dir)
     if not safe.is_dir():
         raise FileNotFoundError(f"SAFE folder not found: {safe}")
-    measurement = safe / "L2P.nc"
-    with xr.open_dataset(measurement, mask_and_scale=True) as ds:
+    measurement = _find_wst_measurement(safe)
+    with xr.open_dataset(measurement, mask_and_scale=True, decode_times=False) as ds:
         sst: npt.NDArray[np.float32] = np.asarray(
-            ds["sea_surface_temperature"].to_numpy(), dtype=np.float32
+            ds["sea_surface_temperature"].squeeze().to_numpy(), dtype=np.float32
         )
-        quality: npt.NDArray[np.int32] = np.asarray(ds["quality_level"].to_numpy(), dtype=np.int32)
-        lat: npt.NDArray[np.float32] = np.asarray(ds["lat"].to_numpy(), dtype=np.float32)
-        lon: npt.NDArray[np.float32] = np.asarray(ds["lon"].to_numpy(), dtype=np.float32)
+        quality: npt.NDArray[np.int32] = np.asarray(
+            ds["quality_level"].squeeze().to_numpy(), dtype=np.int32
+        )
+        lat: npt.NDArray[np.float32] = np.asarray(ds["lat"].squeeze().to_numpy(), dtype=np.float32)
+        lon: npt.NDArray[np.float32] = np.asarray(ds["lon"].squeeze().to_numpy(), dtype=np.float32)
     return L2Reference(
         product_id=safe.name,
         sea_surface_temperature=sst,

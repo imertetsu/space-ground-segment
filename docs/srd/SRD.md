@@ -87,6 +87,11 @@ Each requirement is a single testable statement. Traceability to tests lives in
 > reports must label these as simplifications.
 
 - **Cloud screening is threshold-based**, not a trained/operational cloud mask.
+  On **real data** the L1 `flags_in` `cloud_in` bitmask is **not** used (its
+  operational bit semantics are TBD — our bit-0 reading is the fixture
+  convention), so real runs rely on the S8 brightness-temperature threshold
+  alone. Confirming the real `cloud_in`/`confidence_in` bit definitions and using
+  them is a documented follow-up.
 - **SST is a simplified split-window** from nadir S8/S9 — the **N2 nadir-only
   dual-channel (11/12 µm)** SST type of the SLSTR SST ATBD (EUMETSAT), in the
   constant-coefficient **MCSST** form `SST_°C = a0 + a1·T11 + a2·(T11−T12)`

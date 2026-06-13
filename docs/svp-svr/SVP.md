@@ -71,7 +71,22 @@
   matchups = 1186 (`quality_level ≥ 3`); **bias = −0.0497 K** (≤ 1.0); **RMSE =
   0.0508 K** (≤ 1.5); **100.0 % within ±2 K** (≥ 90); verdict **PASS**. Report:
   `validation.md` + `difference.png` + `validation.json`.
-- **Deviation / caveat:** these numbers exercise the pipeline **mechanics** on
-  SYNTHETIC self-consistent inputs — they are NOT a scientific validation. The
-  real validation (real SLSTR scene via `eumdac` + `config/default.toml` cited
-  coefficients) is pending EUMETSAT Data Store credentials.
+  (These synthetic numbers exercise the pipeline **mechanics** on self-consistent
+  inputs — they are not a scientific validation.)
+
+**Real-data validation run (2026-06-13) — REAL Sentinel-3 SLSTR, `config/default.toml`.**
+
+- **Inputs (real, via `eumdac`, NTC):** L1 `S3A_SL_1_RBT____20260515T230350…` (one
+  nadir granule, 1200×1500) vs official L2 `S3A_SL_2_WST____20260515T223233…`
+  (GHRSST L2P). Coefficients = cited MCSST NOAA-19 day-split (cross-sensor
+  simplification); cloud screening = S8 BT threshold only (real `cloud_in` bit
+  semantics TBD).
+- **Result:** matchups = **330,274** (`quality_level ≥ 3`); **bias = −0.854 K**
+  (≤ 1.0); **RMSE = 1.217 K** (≤ 1.5); **std = 0.867 K**; **91.6 % within ±2 K**
+  (≥ 90); verdict **PASS**.
+- **Interpretation:** a sub-1 K bias / ~1.2 K RMSE against the operational product
+  is a credible, honest outcome for a deliberately simplified cross-sensor
+  split-window — and it clears the (lenient) acceptance thresholds. It is **not**
+  operational-grade SST; the simplifications (SRD §4) stand. Report artifacts
+  (`validation.md`, `difference.png`, `validation.json`) are generated under
+  `data/reports/<id>/` (gitignored, regenerate with `pdgs validate`).

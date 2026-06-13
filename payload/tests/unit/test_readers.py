@@ -6,6 +6,7 @@ from pathlib import Path
 
 import numpy as np
 import pytest
+from netCDF4 import Dataset
 
 from pdgs.ingestion.readers import read_l1_rbt, read_l2_wst
 
@@ -97,3 +98,80 @@ def test_split_window_recovers_wst(l1_safe_dir: Path, l2_safe_dir: Path) -> None
     diff = recovered - ref.sea_surface_temperature
     rmse = float(np.sqrt(np.nanmean(diff**2)))
     assert rmse < 0.2  # tight: the fixture is self-consistent by construction
+
+
+def _write_real_like_wst(safe_dir: Path) -> tuple[np.ndarray, np.ndarray]:
+    """Write a tiny real-product-like GHRSST WST netCDF into ``safe_dir``.
+
+    Mirrors the real ``SL_2_WST`` measurement file: a GHRSST-style filename (NOT
+    ``L2P.nc``), a leading singleton ``time`` dim on the (time, nj, ni) fields, 2D
+    ``lat``/``lon`` (nj, ni), and ``quality_level`` int8 0-5. Returns the (sst, lat)
+    2D arrays written, for the caller to assert against the squeezed read-back.
+    """
+    safe_dir.mkdir(parents=True, exist_ok=True)
+    rows, cols = 3, 4
+    sst = (288.0 + np.arange(rows * cols, dtype=np.float32).reshape(rows, cols)).astype(np.float32)
+    quality = np.full((rows, cols), 5, dtype=np.int8)
+    lat = np.linspace(40.0, 41.0, rows, dtype=np.float32)[:, None] * np.ones((1, cols))
+    lon = np.ones((rows, 1)) * np.linspace(-30.0, -28.5, cols, dtype=np.float32)[None, :]
+
+    name = "20260515223233-MAR-L2P_GHRSST-SSTskin-SLSTRA-20260515_223233-v02.0-fv01.0.nc"
+    with Dataset(safe_dir / name, "w", format="NETCDF4") as ds:
+        ds.title = "real-like GHRSST WST (test)"
+        ds.createDimension("time", 1)
+        ds.createDimension("nj", rows)
+        ds.createDimension("ni", cols)
+
+        sst_v = ds.createVariable("sea_surface_temperature", "f4", ("time", "nj", "ni"))
+        sst_v.units = "kelvin"
+        sst_v[:] = sst[None, :, :]
+
+        q_v = ds.createVariable("quality_level", "i1", ("time", "nj", "ni"))
+        q_v[:] = quality[None, :, :]
+
+        lat_v = ds.createVariable("lat", "f4", ("nj", "ni"))
+        lat_v.units = "degrees_north"
+        lat_v[:, :] = lat.astype(np.float32)
+        lon_v = ds.createVariable("lon", "f4", ("nj", "ni"))
+        lon_v.units = "degrees_east"
+        lon_v[:, :] = lon.astype(np.float32)
+
+    return sst, lat.astype(np.float32)
+
+
+def test_l2_wst_reads_real_like_product_and_squeezes_time(tmp_path: Path) -> None:
+    safe = tmp_path / "S3A_SL_2_WST____20260515_NT.SEN3"
+    expected_sst, expected_lat = _write_real_like_wst(safe)
+
+    ref = read_l2_wst(safe)
+
+    # The leading singleton time dim is squeezed away -> 2D arrays.
+    assert ref.sea_surface_temperature.ndim == 2
+    assert ref.sea_surface_temperature.shape == (3, 4)
+    assert ref.quality_level.shape == (3, 4)
+    assert ref.latitudes.shape == (3, 4)
+    assert ref.longitudes.shape == (3, 4)
+    assert ref.product_id == safe.name
+    np.testing.assert_allclose(ref.sea_surface_temperature, expected_sst)
+    np.testing.assert_allclose(ref.latitudes, expected_lat)
+    assert int(ref.quality_level.max()) == 5
+
+
+def test_l2_wst_selects_measurement_nc_by_content(tmp_path: Path) -> None:
+    # A decoy .nc without sea_surface_temperature must be skipped in favour of the
+    # GHRSST measurement file (found by content, not by filename).
+    safe = tmp_path / "WST.SEN3"
+    _write_real_like_wst(safe)
+    with Dataset(safe / "00_decoy.nc", "w", format="NETCDF4") as ds:
+        ds.createDimension("x", 2)
+        ds.createVariable("not_sst", "f4", ("x",))[:] = np.zeros(2, dtype=np.float32)
+
+    ref = read_l2_wst(safe)
+    assert ref.sea_surface_temperature.shape == (3, 4)
+
+
+def test_l2_wst_no_measurement_nc_raises(tmp_path: Path) -> None:
+    safe = tmp_path / "empty.SEN3"
+    safe.mkdir()
+    with pytest.raises(FileNotFoundError):
+        read_l2_wst(safe)

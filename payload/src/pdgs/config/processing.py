@@ -143,7 +143,10 @@ def default_config() -> ProcessingConfig:
         ),
         cloud=CloudScreeningConfig(
             bt_cloud_threshold_k=270.0,
-            use_l1_cloud_flag=True,
+            # Real-data default OFF: real SLSTR cloud_in bit semantics are TBD, so
+            # rely on the BT threshold (matches config/default.toml). The synthetic
+            # fixture path enables it (config/fixture.toml), where bit-0 applies.
+            use_l1_cloud_flag=False,
         ),
         validation=ValidationConfig(),
     )

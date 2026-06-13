@@ -53,10 +53,17 @@ The reader resolves bands/geolocation from the netCDF set within the folder.
 | `sst_algorithm_type`, `l2p_flags` | algorithm / L2P flags | bitmask |
 | `lat`, `lon` | geolocation | deg |
 
-> **To verify against a real product when credentials arrive:** exact scale/offset
-> attributes, the WST internal netCDF filename, and the `quality_level` /
-> `l2p_flags` bit semantics. Synthetic test fixtures mirror this structure and
-> variable naming, and are **labelled synthetic** (see SRD §4 / §5).
+> **Confirmed against a real product (2026-06-13):** a real `SL_2_WST` SAFE
+> (`.SEN3`) contains **one GHRSST netCDF** named by convention (e.g.
+> `<date>-MAR-L2P_GHRSST-SSTskin-SLSTRA-…-v02.0-fv01.0.nc`), NOT `L2P.nc` — so
+> `read_l2_wst` locates it by globbing for the file containing
+> `sea_surface_temperature`. Its `sea_surface_temperature`/`quality_level` carry a
+> leading singleton `time` dim (squeezed on read); `lat`/`lon` are 2D `(nj, ni)`;
+> `quality_level` is 0–5 (5 = best). A real L1 `SL_1_RBT` `.SEN3` carries ~97
+> netCDFs (the reader uses S7/S8/S9 `_BT_in`, `geodetic_in`, `flags_in`). Products
+> download as a zip → extracted to the `.SEN3` folder. **Still TBD:** the real
+> `cloud_in`/`confidence_in`/`l2p_flags` bit semantics. Synthetic test fixtures
+> mirror this structure/naming and are **labelled synthetic** (see SRD §4 / §5).
 
 ### 1.4 Band → quantity → unit (L1 `SL_1_RBT`)
 

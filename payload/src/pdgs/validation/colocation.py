@@ -9,6 +9,11 @@ SIMPLIFICATION: nearest-neighbour gridding on (lat, lon) — no rigorous resampl
 or footprint matching (see SRD §4). For the same-grid synthetic fixtures this
 reduces to an aligned comparison, but the KDTree path is exercised regardless so it
 also works for the differing real derived / SL_2_WST grids.
+
+Before building the KDTree the reference points are restricted to the derived
+field's lat/lon bounding box (plus a small margin), which keeps full-scene
+references (tens of millions of pixels) tractable. For same-grid fixtures the box
+covers the whole reference, so behaviour is unchanged.
 """
 
 from __future__ import annotations
@@ -22,6 +27,10 @@ from scipy.spatial import cKDTree
 from pdgs.config.processing import ValidationConfig
 from pdgs.ingestion.readers import L2Reference
 from pdgs.processing.product import DerivedSstProduct
+
+# Margin (degrees) added around the derived field's lat/lon bounding box when
+# restricting reference points, so edge derived pixels still find a near neighbour.
+_BBOX_MARGIN_DEG = 0.5
 
 
 @dataclass(frozen=True)
@@ -63,14 +72,6 @@ def colocate(
     ref_sst = np.asarray(reference.sea_surface_temperature, dtype=np.float64).ravel()
     ref_quality = np.asarray(reference.quality_level, dtype=np.int64).ravel()
 
-    # Reference pixels usable as match targets: finite SST and a finite location.
-    ref_usable = np.isfinite(ref_sst) & np.isfinite(ref_lat) & np.isfinite(ref_lon)
-    if not bool(np.any(ref_usable)):
-        return _empty_matchup()
-
-    ref_idx = np.flatnonzero(ref_usable)
-    tree = cKDTree(np.column_stack((ref_lat[ref_idx], ref_lon[ref_idx])))
-
     der_sst = np.asarray(derived.sea_surface_temperature, dtype=np.float64).ravel()
     der_lat = np.asarray(derived.latitudes, dtype=np.float64).ravel()
     der_lon = np.asarray(derived.longitudes, dtype=np.float64).ravel()
@@ -83,6 +84,30 @@ def colocate(
         return _empty_matchup()
 
     der_sel = np.flatnonzero(der_usable)
+
+    # Restrict reference points to the derived field's bounding box (+ margin). This
+    # makes full-scene references tractable; for same-grid fixtures the box covers
+    # the whole reference grid, so the matchups are unchanged.
+    lat_min = float(der_lat[der_sel].min()) - _BBOX_MARGIN_DEG
+    lat_max = float(der_lat[der_sel].max()) + _BBOX_MARGIN_DEG
+    lon_min = float(der_lon[der_sel].min()) - _BBOX_MARGIN_DEG
+    lon_max = float(der_lon[der_sel].max()) + _BBOX_MARGIN_DEG
+
+    # Reference pixels usable as match targets: finite SST/location, inside the AOI.
+    ref_usable = (
+        np.isfinite(ref_sst)
+        & np.isfinite(ref_lat)
+        & np.isfinite(ref_lon)
+        & (ref_lat >= lat_min)
+        & (ref_lat <= lat_max)
+        & (ref_lon >= lon_min)
+        & (ref_lon <= lon_max)
+    )
+    if not bool(np.any(ref_usable)):
+        return _empty_matchup()
+
+    ref_idx = np.flatnonzero(ref_usable)
+    tree = cKDTree(np.column_stack((ref_lat[ref_idx], ref_lon[ref_idx])))
     query_points = np.column_stack((der_lat[der_sel], der_lon[der_sel]))
     # cKDTree.query returns (distances, indices) into the tree's point array.
     _distances, nn = tree.query(query_points, k=1)

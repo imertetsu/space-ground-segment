@@ -39,7 +39,12 @@ valid_max_k = 310.0
 # colder than this S8 brightness temperature is treated as likely cloud over
 # warm sea. Combined (OR) with the L1 cloud flag when use_l1_cloud_flag = true.
 bt_cloud_threshold_k = 270.0
-use_l1_cloud_flag = true
+# Real-data default: OFF. The real SLSTR `flags_in` `cloud_in` bitmask semantics
+# are TBD (the bit-0 convention is the fixture's, not the operational one), so on
+# real data we rely on the BT threshold only rather than mis-decode real flags.
+# (fixture.toml keeps this ON, where bit-0 IS the convention.) Verified real run
+# with this OFF: bias -0.85 K, RMSE 1.22 K vs official WST — see docs/svp-svr.
+use_l1_cloud_flag = false
 
 [validation]
 # Phase 3 acceptance thresholds for derived SST vs official SL_2_WST (REQ-VAL-03).
