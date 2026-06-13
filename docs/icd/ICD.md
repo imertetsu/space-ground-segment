@@ -246,3 +246,131 @@ big-endian; telecommands are SIMULATED.
 **Verified live (2026-06-13):** `SET_MODE(SAFE)` via Yamcs → simulator executes →
 `spacecraft_mode` becomes SAFE in HK; PUS-1 ACKs (APID 102) received; an
 out-of-range `mode` is rejected at validation (HTTP 400, not transmitted).
+
+---
+
+## 3. Shared layers interface (Epic 3)
+
+> Unification layer `shared/` (Python, `sgs_shared`) — `time_service`, `catalogue`,
+> `anomaly` + the `sgs-ops` operator surface. Depends on **neither** segment
+> (import-linter forbidden contract on `pdgs`/`sgs_sim`). Contracts frozen per phase.
+
+### 3.1 Shared catalogue (PostgreSQL) — FROZEN schema (Phase 1)
+
+- DB: **PostgreSQL** (`postgres` compose service, `epic3` profile; db `sgs_catalogue`).
+- `PostgresCatalogue(dsn=None)` (DSN arg or `PDGS_PG_DSN` env) implements the shared
+  `Catalogue` ABC. **Full surface (frozen):** `register` / `get` /
+  `list(*, origin=None)` / `update_status(entry_id, status)` /
+  `set_provenance(entry_id, provenance)`. Schema init is idempotent **and
+  forward-compatible** (`CREATE TABLE IF NOT EXISTS` + `ALTER … ADD COLUMN IF NOT
+  EXISTS` for the `prov_*` columns). A new connection per call; all backend errors
+  wrap in `CatalogueError`.
+- **Unified record `CatalogueEntry` (frozen):** `entry_id`, **`origin`**
+  (`payload`|`control`), **`simulated`** (bool), `product_type`, `status`,
+  `sensing_time` (UTC|None), `ingest_time` (UTC), `reference` (locator),
+  `provenance` (envelope), `detail`. `origin` + `simulated` are mandatory on every
+  row — unification never erases the real-vs-simulated distinction (SRD §5).
+- **Provenance envelope (frozen, one shape both segments):** `source_version`
+  (processor version for payload / MDB id for control), `source_refs`
+  (tuple — payload input product ids / control source parameter ref(s)),
+  `run_time` (UTC|None — payload run / control alarm-trigger time).
+
+**Frozen `catalogue_entries` table:**
+
+| column | type | null | meaning |
+|---|---|---|---|
+| `entry_id` | TEXT PK | no | row id (payload product id / control locator) |
+| `origin` | TEXT (CHECK in `payload`,`control`) | no | source segment |
+| `simulated` | BOOLEAN | no | `false`=payload (REAL), `true`=control (SIMULATED) |
+| `product_type` | TEXT | no | e.g. `SST_L2_DERIVED`, `TM_ARCHIVE_REF`, `OOL_ALARM_REF` |
+| `status` | TEXT | no | lifecycle/state (e.g. `VALIDATED`, `ARCHIVED`, `TRIGGERED`) |
+| `sensing_time` | TIMESTAMPTZ | yes | observation/trigger time (UTC) |
+| `ingest_time` | TIMESTAMPTZ | no | when written to the shared catalogue (UTC) |
+| `reference` | TEXT | no | locator (payload path/id or `yamcs://…`) — never a value copy |
+| `prov_source_version` | TEXT | yes | provenance: processor/MDB version |
+| `prov_source_refs` | TEXT[] | no (`'{}'`) | provenance: upstream ids/param refs |
+| `prov_run_time` | TIMESTAMPTZ | yes | provenance: run/trigger time (UTC) |
+| `detail` | TEXT | yes | free-text note |
+
+- **Catalogue migration policy:** NEW payload writes can target Postgres via the
+  shared mappers (`catalogue.mappers.entry_from_payload_product`) without rewriting
+  the Epic-1 SQLite history; SQLite stays the offline payload-dev catalogue.
+
+### 3.2 Control reference bridge (read-only Yamcs REST)
+
+- **`control_bridge.YamcsControlBridge`** records control telemetry/anomaly
+  **references** (never value copies — AC1.3) into the shared catalogue, read-only
+  over the Yamcs REST API (stdlib `urllib`; **no `control/` code dependency** —
+  same read-only consumer pattern `viz/` will use in Epic 4). Endpoints (instance
+  `myproject`):
+  - `GET /api/mdb/myproject/parameters?system=/SGS` → one `TM_ARCHIVE_REF` per
+    parameter; `reference = yamcs://myproject/parameters/<qualifiedName>`.
+  - `GET /api/archive/myproject/alarms` → one `OOL_ALARM_REF` per alarm;
+    `reference = yamcs://myproject/alarms/<param>/<seqNum>`, `status ∈
+    {TRIGGERED, ACKNOWLEDGED}`, `sensing_time`/`prov_run_time` = alarm `triggerTime`.
+  - Yamcs alarm `id` may be split (`namespace`+`name`) or a single fully-qualified
+    `name` (real archive alarms) — both normalise to the qualified parameter ref.
+- Operator surface: `sgs-ops` CLI behind the dark flag **`SGS_SHARED`** (ships
+  dark): `status` (cross-segment listing), `bridge` (poll Yamcs → record refs),
+  `seed-demo` (hidden).
+
+**Verified live (2026-06-13):** with Yamcs running, `sgs-ops bridge` recorded 15
+control references (14 TM-archive + 1 OOL alarm) from real Yamcs REST, then
+`sgs-ops status` listed them together with a payload product (1 payload + 16
+control), each labelled (`payload` / `control-simulated`); no telemetry value
+stored. 33 shared tests pass (DB + bridge), `lint-imports` keeps `shared ↛ pdgs/sgs_sim`.
+
+### 3.3 Shared anomaly model — FROZEN (Phase 2, REQ-INT-03)
+
+One `Anomaly` record + one state machine cover BOTH payload processing failures
+(the `ProductStatus.FAILED` dead-letter) and control OOL alarms (from Yamcs).
+
+- **`Anomaly` (frozen):** `anomaly_id`, **`origin`** (`payload`|`control`),
+  **`simulated`**, `source_ref` (catalogue linkage — control = the `yamcs://…` alarm
+  locator; payload = the catalogue product id), `kind` (`processing_failure` |
+  `ool_alarm`), `severity`, `state`, `opened_at`/`updated_at` (UTC), `detail`.
+- **State machine (`AnomalyState`):** `OPEN → ACKNOWLEDGED → REPROCESSING →
+  RESOLVED` (RESOLVED terminal); `OPEN`/`ACKNOWLEDGED` may go straight to
+  `RESOLVED`; `REPROCESSING` may fall back to `OPEN`. Transitions validated before
+  the write.
+- **Shared operator actions:** `acknowledge` + `resolve` (both halves);
+  `start_reprocess` is **payload-only** — a control anomaly raises
+  `UnsupportedActionError` (control has no reprocess; payload `REPROCESSING` maps to
+  the existing `pdgs reprocess <id>` capability).
+- **`AnomalyStore` ABC / `PostgresAnomalyStore`:** table `anomalies` (idempotent +
+  forward-compatible schema, UTC `timestamptz`), `record` / `get` / `list(*,
+  origin, state)` / `acknowledge` / `resolve` / `start_reprocess`. Errors wrap in
+  `AnomalyError`.
+- **Bridges (no segment imports):** `anomaly.mappers.anomaly_from_payload_failure`
+  (FAILED product → anomaly) and `anomaly_from_yamcs_alarm` +
+  `control_bridge.collect_anomalies` / `record_anomalies` (Yamcs OOL alarm →
+  anomaly, read-only). CLI: `sgs-ops anomalies` / `ack <id>` / `resolve <id>`
+  (dark-flagged).
+
+**Verified live (2026-06-13):** a payload-failure anomaly and a Yamcs OOL-alarm
+anomaly recorded into the shared store and listed together by `sgs-ops anomalies`
+(each labelled); `ack` advanced the payload one OPEN→ACKNOWLEDGED; `start_reprocess`
+succeeded on the payload anomaly (→REPROCESSING) and was rejected on the control
+anomaly. 62 shared tests pass, `lint-imports` KEPT.
+
+### 3.4 Shared time service — FROZEN (Phase 3, REQ-INT-01)
+
+One UTC base both halves stamp/compare against, plus OBT↔UTC correlation.
+
+- **Shared base = UTC** (tz-aware ISO-8601). Payload products already carry UTC;
+  control telemetry **references** carry UTC (bridge ingest/trigger times). Every
+  catalogue/anomaly row stores `timestamptz` (UTC) — so rows from both halves sort
+  and compare on one base.
+- **`TimeCorrelation` (frozen):** linear model `utc = utc_at_epoch + rate·(obt −
+  obt_epoch)` — `obt_epoch` (s), `utc_at_epoch` (UTC), `rate` (UTC s per OBT s;
+  `1.0` ideal, off-1.0 = drift; non-zero).
+- **API:** `obt_to_utc(obt, corr=None)`, `utc_to_obt(utc, corr=None)` (default =
+  `default_correlation()`); `MISSION_EPOCH_UTC` = `2026-01-01T00:00:00Z`.
+- **DOCUMENTED SIMPLIFICATION (PUS-9 seed):** the simulator emits no PUS time field
+  and Yamcs stamps wall-clock, so there is no live service-9 report;
+  `default_correlation()` returns a **seeded** pair (OBT 0 s ↔ `MISSION_EPOCH_UTC`,
+  `rate=1.0`) — a labelled seed, NOT an operational correlation. Callers with a real
+  pair pass their own `TimeCorrelation`.
+
+**Verified (2026-06-13):** OBT↔UTC round-trips exactly under the default and custom
+(incl. drift `rate≠1.0`) correlations; 70 shared tests pass.

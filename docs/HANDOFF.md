@@ -4,28 +4,31 @@
 > every epic, never endlessly appended. Cap ~150 lines. Read this first when
 > re-entering after a gap. Full methodology + conventions: `CLAUDE.md`.
 
-_Last updated: 2026-06-13 — Epic 1 (payload) + Epic 2 (control) CLOSED on `main`._
+_Last updated: 2026-06-14 — Epics 1, 2 & 3 CLOSED on `main`. Next: Epic 4 (3D viz)._
 
 ## Stack snapshot
 
 - **Project:** "Mini Space Ground Segment" — portfolio ground segment: PDGS
   (payload) + FOS (control) + shared layers + 3D view. Built epic-by-epic.
-- **Done:** Epic 1 `payload/` (Python) · Epic 2 `control/` (Python sim + Yamcs).
-  **Pending:** Epic 3 shared layers (`shared/`), Epic 4 3D viz (`viz/`).
+- **Done:** Epic 1 `payload/` (Python) · Epic 2 `control/` (Python sim + Yamcs) ·
+  Epic 3 `shared/` (unification — catalogue, anomaly, time, `sgs-ops` surface).
+  **Pending:** Epic 4 3D viz (`viz/`).
 - **Stack:** Python 3.11 (payload + simulator) · Java 17 + Yamcs (control) ·
   PostgreSQL (Epic 3) · CesiumJS (Epic 4) · Docker · CI: GitLab + GitHub Actions.
 - **Gates — payload** (`payload/`): ruff · `mypy --strict` 0 · pytest (141) ·
   lint-imports · `docker compose build payload`. **simulator** (`control/simulator/`):
   ruff · `mypy --strict` 0 · pytest (~83). **yamcs** (`control/yamcs/`): `./mvnw
-  package` (XTCE validated by Yamcs at startup).
+  package` (XTCE validated by Yamcs at startup). **shared** (`shared/`): ruff ·
+  `mypy --strict` 0 · pytest (79, postgres-marked need `PDGS_PG_DSN`) · lint-imports.
 
 ## Active feature flags
 
-- None.
+- None. (The Epic-3 `SGS_SHARED` dark flag was **flipped on** at Epic-3 close — the
+  `sgs-ops` operator surface is live by default.)
 
 ## In-flight work
 
-- None. Epics 1 and 2 are complete and on `main`.
+- None. Epic 3 is CLOSED (merged to `main`); Epic 4 (3D viz) not yet started.
 
 ## Epic 1 (payload) — outcome
 
@@ -47,6 +50,24 @@ _Last updated: 2026-06-13 — Epic 1 (payload) + Epic 2 (control) CLOSED on `mai
 - Telemetry is simulated & labelled everywhere. docker-compose FOS stack provided
   (CI-clean; local image build needs the Avast CA).
 
+## Epic 3 (shared / unification) — outcome
+
+- `shared/` (`sgs_shared`, own gates; `lint-imports` forbids `pdgs`/`sgs_sim`)
+  unifies both halves behind one **PostgreSQL catalogue**, one **anomaly model**,
+  one **UTC time base**, surfaced by the **`sgs-ops`** operator CLI. Control stays
+  SIMULATED & labelled; payload stays REAL. Frozen contracts: ICD §3.1 (catalogue
+  schema), §3.2 (Yamcs-REST bridge), §3.3 (anomaly model), §3.4 (time service).
+- **Read-only consumers (no cross-segment code import):** the Yamcs bridge reads
+  the Yamcs REST API; the payload bridge reads the PDGS SQLite catalogue file
+  read-only (`sgs-ops sync-payload`). Data dependencies, not imports.
+- **Verified live:** `sgs-ops overview` renders one cross-segment surface (state +
+  anomalies + last results) — REAL payload products + control references + a control
+  OOL anomaly, control labelled `control-simulated`, all on the shared catalogue/UTC
+  base. The Yamcs bridge was verified against a running Yamcs (15 refs from real
+  REST). 79 shared tests pass. ESCALATED business decisions: adopted the recommended
+  defaults (CLI MVP surface; Postgres for new writes + SQLite stays offline;
+  read-only Yamcs-REST bridge).
+
 ## Recent decisions worth remembering
 
 - Language = English; CI = GitLab + GitHub mirror; remote = **GitHub** `origin`
@@ -62,8 +83,9 @@ _Last updated: 2026-06-13 — Epic 1 (payload) + Epic 2 (control) CLOSED on `mai
   `cloud_in`/`l2p_flags` bits; a `pdgs fetch` command.
 - (control) anomalies clamp at the hard band → OOL lands at WARNING boundary; let
   them overshoot for a clean CRITICAL. Command verifiers are container-match, not
-  request-id-correlated (custom verifier = future). PUS-9 time correlation is a
-  seed (full unification = Epic 3).
+  request-id-correlated (custom verifier = future).
+- (shared) OBT↔UTC correlation is a documented **seed** (no live PUS-9 report; ICD
+  §3.4). `overview` live control state needs Yamcs running (degrades gracefully).
 
 ## Known gotchas
 
@@ -82,12 +104,17 @@ _Last updated: 2026-06-13 — Epic 1 (payload) + Epic 2 (control) CLOSED on `mai
 - Agent roster → `.claude/agents/` (payload-developer, control-developer; viz later)
 - Requirements / interfaces / verification → `docs/srd`, `docs/icd`, `docs/svp-svr`
 - Operations → `docs/operations/operations-guide.md`
-- Code → `payload/`, `control/simulator/` (`sgs_sim`), `control/yamcs/` (+ READMEs)
+- Code → `payload/`, `control/simulator/` (`sgs_sim`), `control/yamcs/`,
+  `shared/` (`sgs_shared` — catalogue/anomaly/time_service/bridges/`sgs-ops`) (+ READMEs)
 
 ## Next step
 
-- **Epic 3 — shared layers:** a shared time service (PUS-9 OBT↔UTC correlation), a
-  shared catalogue (PostgreSQL — products + telemetry refs, one query surface), a
-  single anomaly model (spacecraft OOL + payload failures), and one operator
-  surface across both halves. Branch `epic/shared`; prompt-engineer → product-owner
-  → spec, then Phase 0.
+- **Epic 4 — 3D viz (`viz/`, CesiumJS):** read-only consumer rendering the flow view
+  over the shared catalogue + Yamcs REST (orbit track via satellite.js/SGP4; scene
+  footprints; data-driven overlays from REAL payload products). Write the ephemeral
+  spec first; phase-by-phase with a real browser check; control/illustrative content
+  labelled per SRD §5. Start: a planning agent writes `docs/specs/<epic4>.md`.
+- **Follow-up (non-blocking, payload):** wire the live `pdgs` CLI to optionally write
+  directly into the shared Postgres catalogue (today products reach the shared
+  catalogue via the read-only `sgs-ops sync-payload` SQLite bridge; default stays
+  SQLite for offline dev — the mapper + capability exist and are tested).

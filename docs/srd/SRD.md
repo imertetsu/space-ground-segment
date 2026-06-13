@@ -5,7 +5,8 @@
 > stable; the ephemeral per-epic specs (`docs/specs/<epic>.md`) hold the in-flight
 > plans and are deleted on epic close.
 
-_Scope: Epic 1 (PDGS payload chain, §1) and Epic 2 (FOS control, §1A)._
+_Scope: Epic 1 (PDGS payload chain, §1), Epic 2 (FOS control, §1A) and Epic 3
+(shared layers / unification, §1B)._
 
 ---
 
@@ -89,6 +90,40 @@ Each requirement is a single testable statement. Traceability to tests lives in
 | REQ-TMC-03 | The system shall perform limit checking — parameters out of soft/hard limits raise out-of-limit (OOL) alarms. |
 | REQ-TMC-04 | The system shall support telecommanding — build/validate a TC against the MDB, send it, and track the verification chain. |
 | REQ-TMC-05 | Spacecraft health state and OOL alarms shall be queryable and surfaced to the operator (the Yamcs web UI is acceptable). |
+
+## 1B. Epic 3 — Shared layers (unification) requirements
+
+> Epic 3 **unifies** the two completed segments (Epic 1 payload = Python; Epic 2
+> control = Python simulator + Yamcs) behind a shared cross-cutting layer
+> `shared/` with three contracts: **time-service**, **catalogue**, **anomaly**, and
+> a single **operator surface** over both halves. Lives in `shared/`. The in-flight
+> plan is `docs/specs/shared.md` (ephemeral). The shared catalogue is **PostgreSQL**
+> (the `postgres` service in `docker-compose.yml`, `epic3` profile); the payload
+> catalogue was built behind the `Catalogue` interface (Epic 1) so Epic 3 adds a
+> PostgreSQL implementation of that same contract.
+
+### Integration / unification — REQ-INT
+
+| ID | Requirement |
+|---|---|
+| REQ-INT-01 | The system shall provide a single **time service** that correlates on-board time (OBT) with UTC, so that both payload products and telemetry parameters/references carry consistent UTC timestamps on one shared time base. |
+| REQ-INT-02 | The system shall provide a shared **catalogue/archive** that records BOTH telemetry archive references AND payload products, with unified provenance and a single query surface spanning both halves. |
+| REQ-INT-03 | The system shall provide a single **anomaly model** covering spacecraft OOL events AND payload processing failures — the same states, the same operator view, and the same reprocess/acknowledge actions where applicable. |
+
+> **Epic 3 done:** one **operator surface** (CLI and/or a small read-only API)
+> lists, across both halves, current state, anomalies, and last results — all on the
+> shared time base and the shared catalogue.
+
+> **Unification preserves the data-honesty rules (§5).** Payload data stays **REAL**
+> and control telemetry stays **SIMULATED and labelled "simulated" everywhere** it
+> surfaces — including the unified catalogue rows, anomaly records, and operator
+> CLI/API output. Unification must never erase the real-vs-simulated distinction.
+
+> **Unification preserves the dependency-direction rule (architecture overview §2).**
+> `payload/` and `control/` depend **only on `shared/` contracts**, never on each
+> other; `shared/` depends on neither segment; the operator surface is a **read-only
+> consumer** (shared catalogue + the Yamcs REST API for live control state) with no
+> code dependency on `control/`.
 
 ## 2. Rationale
 
