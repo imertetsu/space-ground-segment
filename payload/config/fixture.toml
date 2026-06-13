@@ -1,0 +1,33 @@
+# PDGS processing configuration — FIXTURE-ONLY (SYNTHETIC, NOT real data).
+#
+# ============================ FIXTURE-ONLY ============================
+# These coefficients are SYNTHETIC and exist ONLY to recover the committed
+# offline test fixtures (payload/fixtures/l1_rbt_synthetic + l2_wst_synthetic),
+# which were generated so that  SST = a0 + a1*S8 + a2*(S8 - S9)  with
+#   a0 = 1.0, a1 = 1.0, a2 = 2.0   (output already in Kelvin, offset 0.0)
+# recovers the synthetic WST SST field. They are NOT real, NOT cited, and must
+# NEVER be presented as operational. The REAL-DATA coefficients live in
+# config/default.toml. Use this config only for the offline demo and tests:
+#   pdgs process --config config/fixture.toml
+# =====================================================================
+
+config_version = "fixture-1.0.0"
+
+[sst]
+coefficient_set_id = "synthetic-fixture"
+a0 = 1.0
+a1 = 1.0
+a2 = 2.0
+output_offset_k = 0.0
+source = "SYNTHETIC fixture — not real"
+# Range chosen to bracket the synthetic field (~287.9 .. 300.0 K). Out-of-range
+# pixels are still FLAGGED, not clamped (REQ-PRO-05).
+valid_min_k = 271.15
+valid_max_k = 310.0
+
+[cloud]
+# The synthetic cloudy pixels are NOT cold (S8 ~287-291 K), so screening relies
+# on the L1 cloud flag (bit0) only. The BT threshold is set below the coldest
+# fixture pixel so it never fires, exercising the flag-based path deterministically.
+bt_cloud_threshold_k = 250.0
+use_l1_cloud_flag = true

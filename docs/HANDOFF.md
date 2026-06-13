@@ -4,7 +4,7 @@
 > every epic, never endlessly appended. Cap ~150 lines. Read this first when
 > re-entering the project after a gap. Full methodology lives in `CLAUDE.md`.
 
-_Last updated: 2026-06-13 — Epic 1 (payload), Phase 1 (ingestion + catalogue) complete (offline/mock)._
+_Last updated: 2026-06-13 — Epic 1 (payload), Phase 2 (processing chain) complete (offline/mock)._
 
 ## Stack snapshot
 
@@ -18,8 +18,8 @@ _Last updated: 2026-06-13 — Epic 1 (payload), Phase 1 (ingestion + catalogue) 
 - **Quality gates (payload, run from `payload/`):** `ruff check .` ·
   `ruff format --check .` · `mypy src` · `pytest` · `lint-imports` ·
   `docker compose build payload`. All green at Phase 0.
-- **Type-check baseline:** `mypy --strict` = **0 errors** (11 files). Recorded
-  2026-06-13. Any new error blocks a phase.
+- **Type-check baseline:** `mypy --strict` = **0 errors** (file count grows per
+  phase). Any new error blocks a phase.
 
 ## Active feature flags
 
@@ -36,12 +36,19 @@ _Last updated: 2026-06-13 — Epic 1 (payload), Phase 1 (ingestion + catalogue) 
   routing), FROZEN L1-reader contract (`L1Scene`/`read_l1_rbt`) + `L2Reference`,
   tiny **labelled-synthetic** SLSTR fixtures + deterministic generator, CLI
   `ingest`/`status`. 48 tests; gates green; mypy --strict 0 (19 files).
+- **Epic 1 / Phase 2 DONE (offline/mock)** on `epic/payload`: versioned config
+  (`ProcessingConfig`, tomllib; `config/default.toml` = cited MCSST coeffs,
+  `config/fixture.toml` = synthetic demo coeffs), `screen_clouds` (threshold +
+  L1 flag), `retrieve_sst` (N2 split-window, NaN over cloud, out-of-range
+  flagged), FROZEN `DerivedSstProduct` + netCDF writer + `process_scene`
+  orchestration (stamps provenance, registers `SST_L2_DERIVED` PROCESSED), CLI
+  `process`. 67 tests; gates green; mypy --strict 0.
 - **Decision (user):** build payload with **mock data now**, switch to real data
   when the API key arrives. Real-data run is the only remaining gate to true
   "Epic 1 done".
-- **Next: Phase 2 (processing)** — cloud screening + split-window SST. Unblocked
-  (consumes the frozen L1-reader contract); the two processors can be built in
-  parallel once the product/provenance model is frozen.
+- **Next: Phase 3 (IV&V + validation)** — co-locate derived SST vs official L2,
+  stats (bias/RMSE/std/match%/count), threshold gate, report + difference plot.
+  Unblocked (consumes the frozen DerivedSstProduct + L2Reference).
 
 ## Recent decisions worth remembering
 

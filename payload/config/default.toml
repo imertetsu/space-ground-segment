@@ -1,0 +1,42 @@
+# PDGS processing configuration — REAL-DATA default (Phase 2).
+#
+# Simplified split-window Sea Surface Temperature (SST) retrieval + threshold
+# cloud screening. Versioned per REQ-CFG-01; the config_version is recorded in
+# every derived product's provenance (REQ-CFG-02).
+#
+# SCIENCE / COEFFICIENT SOURCE (cited — do NOT present as operational):
+#   SST type = N2 nadir-only dual-channel (11/12 µm) split-window of the
+#   SLSTR SST ATBD (EUMETSAT): S8 (~10.8 µm) ≈ T11, S9 (~12 µm) ≈ T12.
+#   Operational SLSTR uses water-vapour-binned LUT coefficients (ATBD) — we do
+#   NOT reproduce those. Instead we use a SIMPLIFIED constant-coefficient form,
+#   the MCSST family (McClain/Pichel/Walton 1985):
+#       SST_°C = a0 + a1*T11 + a2*(T11 - T12)      (output → K via +273.15)
+#   Coefficients = published NOAA-19 day-split MCSST set from the ENVI
+#   "Compute AVHRR Sea Surface Temperature" documentation. The nadir view drops
+#   the MCSST sec(θ)-1 term.
+#
+#   CROSS-SENSOR SIMPLIFICATION: applying AVHRR MCSST coefficients to SLSTR
+#   bands is a documented simplification, NOT the operational SLSTR SST product.
+
+config_version = "2.0.0"
+
+[sst]
+coefficient_set_id = "mcsst-noaa19-day-split"
+# MCSST NOAA-19 day-split coefficients (°C domain).
+a0 = -278.74596
+a1 = 1.01922
+a2 = 1.72270
+# MCSST is defined in °C; convert to Kelvin.
+output_offset_k = 273.15
+source = "Simplified split-window (MCSST family — McClain/Pichel/Walton 1985); NOAA-19 day-split coefficients per ENVI 'Compute AVHRR Sea Surface Temperature' documentation. SST type = N2 nadir-only dual-channel (11/12 µm) of the SLSTR SST ATBD (EUMETSAT). CROSS-SENSOR SIMPLIFICATION: AVHRR coefficients applied to SLSTR S8/S9; NOT operational SLSTR SST."
+# Physically plausible open-ocean SST range; pixels outside are FLAGGED, not
+# clamped or discarded (REQ-PRO-05). ~ -2 °C (sea-ice freezing) .. ~37 °C.
+valid_min_k = 271.15
+valid_max_k = 310.0
+
+[cloud]
+# Threshold-based screening (SIMPLIFIED, not an operational cloud mask): a pixel
+# colder than this S8 brightness temperature is treated as likely cloud over
+# warm sea. Combined (OR) with the L1 cloud flag when use_l1_cloud_flag = true.
+bt_cloud_threshold_k = 270.0
+use_l1_cloud_flag = true

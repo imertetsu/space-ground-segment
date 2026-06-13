@@ -87,9 +87,17 @@ Each requirement is a single testable statement. Traceability to tests lives in
 > reports must label these as simplifications.
 
 - **Cloud screening is threshold-based**, not a trained/operational cloud mask.
-- **SST is a simplified split-window** from nadir S8/S9. The **coefficient source
-  is TBD** — to be cited from a public reference (e.g. a published SLSTR/AVHRR
-  split-window coefficient set); **do not invent coefficients**.
+- **SST is a simplified split-window** from nadir S8/S9 — the **N2 nadir-only
+  dual-channel (11/12 µm)** SST type of the SLSTR SST ATBD (EUMETSAT), in the
+  constant-coefficient **MCSST** form `SST_°C = a0 + a1·T11 + a2·(T11−T12)`
+  (output → K via +273.15). Coefficients = published **NOAA-19 day-split MCSST**
+  set (MCSST family: McClain/Pichel/Walton 1985; values via ENVI "Compute AVHRR
+  Sea Surface Temperature"). **Cross-sensor simplification:** AVHRR coefficients
+  applied to SLSTR S8/S9 — NOT the operational SLSTR SST (which uses
+  water-vapour-binned LUT coefficients per the ATBD). The MCSST `sec(θ)−1`
+  view-angle term is dropped for nadir. Coefficients live in versioned config
+  (`payload/config/default.toml`); the offline demo uses synthetic fixture
+  coefficients (`config/fixture.toml`, labelled).
 - **Co-location is nearest-neighbour gridding** between the derived grid and the
   official L2P grid — no rigorous resampling / footprint matching.
 - **Nadir view only** for the MVP; oblique view deferred.
