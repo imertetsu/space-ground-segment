@@ -1,8 +1,9 @@
 # Architecture Overview
 
 > System-level architecture for the Mini Space Ground Segment. Persistent
-> document. Epic 1 implements only the `payload/` context; the rest is mapped
-> here for orientation.
+> document. **Epics 1–3 are implemented** — `payload/` (PDGS), `control/` (FOS),
+> and the cross-cutting `shared/` layer with the `sgs-ops` operator surface.
+> `viz/` (Epic 4) is mapped here for orientation.
 
 ---
 
@@ -13,8 +14,9 @@ Modular monorepo with two bounded contexts and a cross-cutting shared layer. The
 
 ```
                          ┌───────────────────────────────────────────┐
-                         │              shared/ (contracts)            │
-                         │   time-service  ·  catalogue  ·  anomaly    │
+                         │       shared/ (contracts) — Epic 3 ✓        │
+                         │   time-service · catalogue · anomaly        │
+                         │   + sgs-ops operator surface (live)         │
                          └───────────────────────────────────────────┘
                               ▲                              ▲
               depends on      │                              │   depends on
@@ -24,7 +26,7 @@ Modular monorepo with two bounded contexts and a cross-cutting shared layer. The
         │      payload/  (PDGS)        │      │       control/  (FOS)           │
         │      Python                  │      │       Java / Yamcs              │
         │                              │      │                                 │
-        │  cli                         │      │  (Epic 2 — WIP):                │
+        │  cli                         │      │  (Epic 2 ✓):                    │
         │   └─ ingestion │ processing  │      │   TM/TC, CCSDS, PUS, XTCE MIB   │
         │      │ validation            │      │                                 │
         │      └─ catalogue            │      │                                 │
@@ -48,7 +50,13 @@ Modular monorepo with two bounded contexts and a cross-cutting shared layer. The
   nothing depends on `viz/`.
 - Within `payload/` (Python), strict layering: `cli → (ingestion | processing |
   validation) → catalogue → config`. Lower layers never import upper layers.
-- Enforced by the project's arch-check gate (wired in Phase 0).
+- `shared/` depends on **neither** segment (its `lint-imports` contract forbids
+  importing `pdgs`/`sgs_sim`). The `sgs-ops` operator surface and the bridges are
+  **read-only consumers**: the Yamcs bridge reads the Yamcs REST API and the payload
+  bridge reads the PDGS SQLite catalogue file read-only — **data** dependencies, not
+  code imports, so the cross-segment isolation holds.
+- Enforced by the project's arch-check gate (`import-linter`, wired in Phase 0;
+  extended to `shared/` in Epic 3).
 
 ## 3. Conceptual calibration symmetry (payload ↔ control)
 

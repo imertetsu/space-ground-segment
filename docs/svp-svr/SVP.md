@@ -57,6 +57,13 @@
 | REQ-OPS-01 | `test_ingest_roundtrip.py::test_ingest_corrupt_download_routes_to_failed` | Passing (capability; operator dead-letter CLI = Phase 4) |
 | REQ-OPS-02 | `test_reproducibility.py::test_on_demand_reprocessing_refreshes_in_place` | Passing (capability; `reprocess` CLI = Phase 4) |
 | REQ-OPS-03 | `test_cli.py::test_status_command_returns_zero` | Passing |
+| REQ-INT-01 | `shared/tests/test_time_service.py` (OBT↔UTC round-trip, default + drift) | Passing |
+| REQ-INT-02 | `shared/tests/test_postgres_catalogue.py::test_cross_segment_listing` + `test_payload_bridge.py` | Passing |
+| REQ-INT-03 | `shared/tests/test_anomaly_store.py` (state machine, ack/reprocess) + `test_control_bridge.py::*anomal*` | Passing |
+
+> REQ-INT-* are verified by the **shared** segment's own gates (`shared/tests`,
+> postgres-marked tests run against the live `epic3` PostgreSQL). They are outside
+> the payload IV&V `--collect-only` suite (which scopes `payload/`).
 
 ---
 
@@ -90,3 +97,16 @@
   operational-grade SST; the simplifications (SRD §4) stand. Report artifacts
   (`validation.md`, `difference.png`, `validation.json`) are generated under
   `data/reports/<id>/` (gitignored, regenerate with `pdgs validate`).
+
+**Epic 3 verification (2026-06-14, shared layers, live PostgreSQL).**
+
+- **Quality gates (`shared/`):** ruff (lint+format), `mypy --strict` = 0,
+  `import-linter` 1 contract kept (`shared ↛ pdgs/sgs_sim`), **79 tests passing**
+  (unit + postgres-marked against the `epic3` PostgreSQL).
+- **REQ-INT-01..03 each have a passing mapped test** (matrix above). Verified live:
+  `sgs-ops overview` renders one cross-segment surface — REAL payload products
+  (mirrored read-only from the PDGS SQLite catalogue) + control references + a
+  control OOL anomaly — all on the shared catalogue/UTC base, control labelled
+  `control-simulated`. The Yamcs control bridge was separately verified against a
+  running Yamcs (15 references recorded from real REST). Live control state in
+  `overview` requires Yamcs; it degrades gracefully when absent.

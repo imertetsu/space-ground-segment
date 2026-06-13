@@ -122,6 +122,43 @@ time report (CCSDS CUC) and a real OBT↔UTC correlation consumed by both segmen
 so payload products and telemetry parameters share one UTC base — the control-side
 analogue of payload product time-stamping.
 
+## Unification — shared layers (Epic 3)
+
+The `shared/` layer (`sgs_shared`) unifies both halves behind one PostgreSQL
+catalogue, one anomaly model, and one UTC time base, surfaced by the **`sgs-ops`**
+operator CLI. Control telemetry stays **SIMULATED** and labelled (`control-simulated`)
+everywhere; payload data stays REAL. The surface is **read-only** w.r.t. the
+segments (no `control/`/`pdgs` imports) — see the ICD §3 frozen contracts.
+
+```bash
+# Start the shared PostgreSQL catalogue (epic3 profile) and point sgs-ops at it:
+docker compose --profile epic3 up -d postgres            # from the repo root
+export PDGS_PG_DSN="postgresql://sgs:change-me@localhost:5432/sgs_catalogue"
+
+# Mirror REAL payload products from the PDGS SQLite catalogue (read-only):
+sgs-ops sync-payload --sqlite <path-to-pdgs catalogue.sqlite>
+# Record control telemetry/alarm REFERENCES from a running Yamcs (read-only REST):
+sgs-ops bridge                                           # needs Yamcs on :8090
+# Record control OOL alarms as shared anomalies:
+#   (the bridge's record_anomalies path; same read-only Yamcs REST)
+
+# THE unified operator surface — state + anomalies + last results, both halves:
+sgs-ops overview
+# Other subcommands: status (catalogue listing), anomalies / ack <id> / resolve <id>.
+```
+
+- **Catalogue (REQ-INT-02):** `catalogue_entries` records payload products AND
+  control references with a common origin/`simulated`/provenance envelope (ICD §3.1);
+  the Yamcs bridge records `TM_ARCHIVE_REF` + `OOL_ALARM_REF` **references** only —
+  never telemetry values (ICD §3.2).
+- **Anomaly model (REQ-INT-03):** one record + state machine
+  (`OPEN→ACKNOWLEDGED→REPROCESSING→RESOLVED`) for payload `FAILED` dead-letter AND
+  control OOL alarms; `ack`/`resolve` on both, `reprocess` payload-only (ICD §3.3).
+- **Time base (REQ-INT-01):** one UTC base; `time_service` adds OBT↔UTC correlation
+  (seeded — the PUS-9 simplification, ICD §3.4).
+- **Live control state** in `overview` requires Yamcs running; otherwise it degrades
+  gracefully to a labelled "unavailable" note (the catalogue/anomaly view still works).
+
 ## 3D view
 
 The 3D flow view is **Epic 4** — not yet built.
