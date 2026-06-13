@@ -1,10 +1,15 @@
 # Mini Space Ground Segment — service composition.
 #
-# Phase 0 (Epic 1) ships only the payload (PDGS) service. Other services are
-# added with their epics and kept as commented placeholders until then:
-#   - yamcs + simulator : Epic 2 (FOS / control)
-#   - postgres          : Epic 3 (shared catalogue)
-#   - viz               : Epic 4 (3D flow web app)
+# - payload   : Epic 1 (PDGS) — operator CLI / pipeline (runs and exits).
+# - yamcs     : Epic 2 (FOS) — Yamcs MCS (CCSDS/PUS, XTCE MDB), web UI :8090.
+# - simulator : Epic 2 (FOS) — SIMULATED CCSDS/PUS spacecraft simulator.
+# - postgres  : Epic 3 — shared catalogue (placeholder; not yet wired).
+# - viz       : Epic 4 — 3D flow web app (placeholder).
+#
+# NOTE (local, behind Avast TLS interception): the `yamcs` service runs `mvn
+# yamcs:run`, which downloads Maven deps INSIDE the container and will fail cert
+# verification locally (same issue as pip/Maven elsewhere). CI runners are
+# unaffected. The native run (control/README.md) is the verified path locally.
 
 services:
   payload:
@@ -12,11 +17,44 @@ services:
       context: ./payload
       dockerfile: Dockerfile
     image: sgs-payload:dev
-    # Phase 0: runs the operator CLI status and exits (no long-running process).
-    command: ["status"]
+    command: ["status"] # Epic 1: runs the operator CLI status and exits.
 
-  # --- Placeholders for later epics ---------------------------------------
-  # yamcs:        # Epic 2 — Yamcs mission control (CCSDS/PUS, XTCE MIB)
-  # simulator:    # Epic 2 — CCSDS/PUS spacecraft simulator (UDP/TCP -> yamcs)
-  # postgres:     # Epic 3 — shared catalogue (products + telemetry refs)
-  # viz:          # Epic 4 — 3D flow web app (CesiumJS + satellite.js)
+  yamcs:
+    image: maven:3.9.9-eclipse-temurin-17
+    working_dir: /yamcs
+    command: ["mvn", "-B", "yamcs:run"]
+    volumes:
+      - ./control/yamcs:/yamcs
+    ports:
+      - "8090:8090" # web UI / REST API
+      - "10015:10015/udp" # TM (UdpTmDataLink)
+      - "10025:10025/udp" # TC (UdpTcDataLink)
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:8090/api/instances || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+      start_period: 60s
+
+  simulator:
+    build:
+      context: ./control/simulator
+      dockerfile: Dockerfile
+    image: sgs-sim:dev
+    command: ["--host", "yamcs", "--port", "10015", "--duration", "0"]
+    depends_on:
+      yamcs:
+        condition: service_healthy
+
+  # --- Epic 3 placeholder: shared catalogue --------------------------------
+  postgres:
+    image: postgres:16
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-sgs_catalogue}
+      POSTGRES_USER: ${POSTGRES_USER:-sgs}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-change-me}
+    ports:
+      - "5432:5432"
+    profiles: ["epic3"] # not started by default until Epic 3 wires it
+
+  # viz: # Epic 4 — 3D flow web app (CesiumJS + satellite.js)

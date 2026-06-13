@@ -1,4 +1,9 @@
-# Operations Guide — Epic 1 (PDGS / Payload)
+# Operations Guide
+
+Covers **PDGS / payload** (Epic 1) and **FOS / control** (Epic 2). Payload first;
+the FOS / control section is near the end.
+
+## PDGS / Payload (Epic 1)
 
 How to run the payload chain. All commands run from the `payload/` directory using
 its virtualenv. Authoritative gate commands/baselines live in `CLAUDE.md §0`.
@@ -67,6 +72,56 @@ report under `data/reports/<derived_id>/` (`validation.md`, `validation.json`,
 3. Known real-path TODOs are tracked in `docs/HANDOFF.md` (zip-SAFE extraction,
    Data Store checksum as the expected digest, confirm the WST internal filename).
 
+## FOS / Control (Epic 2) — SIMULATED
+
+The FOS = our **SIMULATED** Python spacecraft simulator (CCSDS/PUS) → **Yamcs**
+(XTCE MDB). All telemetry/commands are simulated and labelled.
+
+### Run natively (verified path)
+
+```bash
+cd control/yamcs && ./mvnw yamcs:run          # Yamcs web UI: http://localhost:8090
+# in another shell — the simulator (HK stream + TC receiver):
+cd control/simulator && python -m sgs_sim.cli.main   # TM → UDP :10015, TC ← :10025
+```
+Behind Avast, export `JDK_JAVA_OPTIONS=-Djavax.net.ssl.trustStoreType=Windows-ROOT`
+and `CURL_HOME` (a `.curlrc` of `ssl-no-revoke`) for `mvnw` — see `control/README.md`.
+
+### Run via docker-compose (CI-clean; local image build needs the Avast CA)
+
+```bash
+docker compose up yamcs simulator   # from the repo root
+```
+
+### Operate (Yamcs web UI :8090, or the REST API)
+
+- **Telemetry:** Telemetry → Parameters → SpaceSystem `SGS` — decommutated HK in
+  engineering units (battery_voltage V, obc_temp °C, reaction_wheel_speed RPM,
+  spacecraft_mode enum, …). REST: `GET /api/processors/myproject/realtime/parameters/SGS/<param>`.
+- **Alarms:** out-of-limit parameters raise OOL alarms (Alarms view). Trigger one
+  by enabling an anomaly in `control/simulator/config/*.toml` (e.g. `obc_overtemp`,
+  `battery_undervoltage`, `rw_overspeed`).
+- **Telecommand:** Commanding → send `SGS/SET_MODE` (mode SAFE/NOMINAL/PAYLOAD) or
+  `PING`; the simulator returns PUS-1 verification ACKs and the new mode appears in
+  HK. Out-of-range args are rejected at validation. REST:
+  `POST /api/processors/myproject/realtime/commands/SGS/SET_MODE` body `{"args":{"mode":"SAFE"}}`.
+
+### MIB summary
+
+The mission database (parameters, calibration, limits, commands, ACK containers)
+is `control/yamcs/src/main/yamcs/mdb/xtce.xml`; its summary is recorded in the ICD:
+§2.5 (HK packet field-map), §2.6 (TM params / calibration / limits), §2.7
+(commands + verification). Packet byte-level spec: `control/simulator/PACKET_FORMAT.md`.
+
+### Time correlation (PUS-9) — seed for Epic 3
+
+OBT↔UTC correlation is **seeded**, not yet unified: the simulator omits a PUS time
+field (documented simplification) and Yamcs stamps packet time from its own clock
+(`MyPacketPreprocessor`). Epic 3's shared **time service** will add a PUS service-9
+time report (CCSDS CUC) and a real OBT↔UTC correlation consumed by both segments,
+so payload products and telemetry parameters share one UTC base — the control-side
+analogue of payload product time-stamping.
+
 ## 3D view
 
-The 3D flow view is **Epic 4** — not part of the payload epic.
+The 3D flow view is **Epic 4** — not yet built.
