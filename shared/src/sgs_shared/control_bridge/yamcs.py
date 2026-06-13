@@ -21,6 +21,7 @@ from typing import TYPE_CHECKING, Any
 from urllib.error import URLError
 from urllib.request import urlopen
 
+from sgs_shared.anomaly.mappers import anomaly_from_yamcs_alarm
 from sgs_shared.catalogue.mappers import (
     entry_from_control_alarm,
     entry_from_control_archive_ref,
@@ -29,8 +30,49 @@ from sgs_shared.catalogue.mappers import (
 if TYPE_CHECKING:
     from collections.abc import Callable
 
+    from sgs_shared.anomaly.models import Anomaly
+    from sgs_shared.anomaly.repository import AnomalyStore
     from sgs_shared.catalogue.models import CatalogueEntry
     from sgs_shared.catalogue.repository import Catalogue
+
+
+class _ParsedAlarm:
+    """The normalised, value-free fields of one Yamcs archive alarm.
+
+    Holds ONLY the locator + state-bearing fields shared by the catalogue
+    (``OOL_ALARM_REF``) and the anomaly (``ool_alarm``) mappers — never a copy of a
+    telemetry value (AC1.3). Built by :func:`_parse_alarm` from one alarm dict.
+    """
+
+    __slots__ = (
+        "acknowledged",
+        "parameter",
+        "reference",
+        "seq_num",
+        "severity",
+        "trigger_time",
+        "violations",
+    )
+
+    def __init__(
+        self,
+        *,
+        parameter: str,
+        reference: str,
+        seq_num: object,
+        severity: str,
+        trigger_time: datetime | None,
+        acknowledged: bool,
+        violations: object,
+    ) -> None:
+        self.parameter = parameter
+        self.reference = reference
+        self.seq_num = seq_num
+        self.severity = severity
+        self.trigger_time = trigger_time
+        self.acknowledged = acknowledged
+        # A violation COUNT (not a telemetry value) — a human label only.
+        self.violations = violations
 
 
 class BridgeError(RuntimeError):
@@ -117,49 +159,67 @@ class YamcsControlBridge:
             )
         return entries
 
-    def _collect_alarm_refs(self, ingest_time: datetime) -> list[CatalogueEntry]:
-        """One ``OOL_ALARM_REF`` per archived alarm (locator + state only)."""
+    def _fetch_alarms(self) -> list[_ParsedAlarm]:
+        """GET the archive alarms and parse each into a value-free :class:`_ParsedAlarm`.
+
+        Shared by :meth:`_collect_alarm_refs` (catalogue) and :meth:`collect_anomalies`
+        (anomalies) so the id-normalisation / state logic lives in one place. Reads ONLY
+        locator + state fields — never ``triggerValue`` / ``currentValue`` (AC1.3).
+        """
         path = f"/api/archive/{self.instance}/alarms"
         body = self._fetch_json(path)
         alarms = body.get("alarms", [])
-        entries: list[CatalogueEntry] = []
+        parsed: list[_ParsedAlarm] = []
         for alarm in alarms:
             if not isinstance(alarm, dict):  # pragma: no cover - defensive
                 continue
-            ident = alarm.get("id", {})
-            namespace = str(ident.get("namespace", "")) if isinstance(ident, dict) else ""
-            name = str(ident.get("name", "")) if isinstance(ident, dict) else ""
-            seq_num = alarm.get("seqNum", 0)
-            # Yamcs returns the parameter id either split (namespace + bare name) or as
-            # a single fully-qualified name (real archive alarms: id={"name":
-            # "/SGS/obc_temp"}, no namespace). Normalise both to one qualified name so
-            # the locator never doubles a slash.
-            if namespace and not name.startswith(namespace):
-                parameter = f"{namespace}/{name}"
-            else:
-                parameter = name
-            reference = f"yamcs://{self.instance}/alarms{parameter}/{seq_num}"
-            trigger_raw = alarm.get("triggerTime")
-            trigger_time = (
-                _parse_iso_utc(str(trigger_raw)) if isinstance(trigger_raw, str) else None
-            )
-            severity = str(alarm.get("severity", "UNKNOWN"))
-            # State/labels ONLY — deliberately never read triggerValue/currentValue.
-            acknowledged = bool(alarm.get("acknowledged", False))
-            status = "ACKNOWLEDGED" if acknowledged else "TRIGGERED"
-            violations = alarm.get("violations")
-            detail = f"SIMULATED alarm; severity={severity}"
-            if violations is not None:
-                detail += f"; violations={violations}"
+            parsed.append(self._parse_alarm(alarm))
+        return parsed
+
+    def _parse_alarm(self, alarm: dict[str, Any]) -> _ParsedAlarm:
+        """Normalise one alarm dict into a value-free :class:`_ParsedAlarm`."""
+        ident = alarm.get("id", {})
+        namespace = str(ident.get("namespace", "")) if isinstance(ident, dict) else ""
+        name = str(ident.get("name", "")) if isinstance(ident, dict) else ""
+        seq_num = alarm.get("seqNum", 0)
+        # Yamcs returns the parameter id either split (namespace + bare name) or as a
+        # single fully-qualified name (real archive alarms: id={"name": "/SGS/obc_temp"},
+        # no namespace). Normalise both to one qualified name so the locator never doubles
+        # a slash.
+        parameter = f"{namespace}/{name}" if namespace and not name.startswith(namespace) else name
+        reference = f"yamcs://{self.instance}/alarms{parameter}/{seq_num}"
+        trigger_raw = alarm.get("triggerTime")
+        trigger_time = _parse_iso_utc(str(trigger_raw)) if isinstance(trigger_raw, str) else None
+        severity = str(alarm.get("severity", "UNKNOWN"))
+        # State/labels ONLY — deliberately never read triggerValue/currentValue.
+        acknowledged = bool(alarm.get("acknowledged", False))
+        return _ParsedAlarm(
+            parameter=parameter,
+            reference=reference,
+            seq_num=seq_num,
+            severity=severity,
+            trigger_time=trigger_time,
+            acknowledged=acknowledged,
+            violations=alarm.get("violations"),
+        )
+
+    def _collect_alarm_refs(self, ingest_time: datetime) -> list[CatalogueEntry]:
+        """One ``OOL_ALARM_REF`` per archived alarm (locator + state only)."""
+        entries: list[CatalogueEntry] = []
+        for alarm in self._fetch_alarms():
+            status = "ACKNOWLEDGED" if alarm.acknowledged else "TRIGGERED"
+            detail = f"SIMULATED alarm; severity={alarm.severity}"
+            if alarm.violations is not None:
+                detail += f"; violations={alarm.violations}"
             entries.append(
                 entry_from_control_alarm(
-                    alarm_id=reference,
-                    parameter=parameter,
-                    severity=severity,
+                    alarm_id=alarm.reference,
+                    parameter=alarm.parameter,
+                    severity=alarm.severity,
                     status=status,
-                    trigger_time=trigger_time,
+                    trigger_time=alarm.trigger_time,
                     ingest_time=ingest_time,
-                    reference=reference,
+                    reference=alarm.reference,
                     detail=detail,
                 )
             )
@@ -175,6 +235,32 @@ class YamcsControlBridge:
         ingest_time = datetime.now(tz=UTC)
         return self._collect_archive_refs(ingest_time) + self._collect_alarm_refs(ingest_time)
 
+    def collect_anomalies(self) -> list[Anomaly]:
+        """Read-only: one ``ool_alarm`` :class:`Anomaly` per archived Yamcs alarm.
+
+        Reuses the same archive-alarm fetch/parse as :meth:`_collect_alarm_refs`, so the
+        anomaly's ``source_ref`` (and id) is the SAME ``yamcs://…`` alarm locator the
+        catalogue ``OOL_ALARM_REF`` row carries. ``trigger_time`` is parsed UTC;
+        ``acknowledged`` maps OPEN/ACKNOWLEDGED. No telemetry value is ever read or stored.
+        """
+        anomalies: list[Anomaly] = []
+        for alarm in self._fetch_alarms():
+            trigger_time = (
+                alarm.trigger_time if alarm.trigger_time is not None else datetime.now(tz=UTC)
+            )
+            detail = f"SIMULATED OOL alarm on {alarm.parameter}; severity={alarm.severity}"
+            anomalies.append(
+                anomaly_from_yamcs_alarm(
+                    alarm_ref=alarm.reference,
+                    parameter=alarm.parameter,
+                    severity=alarm.severity,
+                    trigger_time=trigger_time,
+                    acknowledged=alarm.acknowledged,
+                    detail=detail,
+                )
+            )
+        return anomalies
+
 
 def record_references(catalogue: Catalogue, bridge: YamcsControlBridge) -> int:
     """Collect control references and register each into ``catalogue``; return the count."""
@@ -182,3 +268,11 @@ def record_references(catalogue: Catalogue, bridge: YamcsControlBridge) -> int:
     for entry in entries:
         catalogue.register(entry)
     return len(entries)
+
+
+def record_anomalies(store: AnomalyStore, bridge: YamcsControlBridge) -> int:
+    """Collect control OOL-alarm anomalies and record each into ``store``; return the count."""
+    anomalies = bridge.collect_anomalies()
+    for anomaly in anomalies:
+        store.record(anomaly)
+    return len(anomalies)

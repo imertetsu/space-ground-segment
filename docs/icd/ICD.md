@@ -319,3 +319,36 @@ control references (14 TM-archive + 1 OOL alarm) from real Yamcs REST, then
 `sgs-ops status` listed them together with a payload product (1 payload + 16
 control), each labelled (`payload` / `control-simulated`); no telemetry value
 stored. 33 shared tests pass (DB + bridge), `lint-imports` keeps `shared ↛ pdgs/sgs_sim`.
+
+### 3.3 Shared anomaly model — FROZEN (Phase 2, REQ-INT-03)
+
+One `Anomaly` record + one state machine cover BOTH payload processing failures
+(the `ProductStatus.FAILED` dead-letter) and control OOL alarms (from Yamcs).
+
+- **`Anomaly` (frozen):** `anomaly_id`, **`origin`** (`payload`|`control`),
+  **`simulated`**, `source_ref` (catalogue linkage — control = the `yamcs://…` alarm
+  locator; payload = the catalogue product id), `kind` (`processing_failure` |
+  `ool_alarm`), `severity`, `state`, `opened_at`/`updated_at` (UTC), `detail`.
+- **State machine (`AnomalyState`):** `OPEN → ACKNOWLEDGED → REPROCESSING →
+  RESOLVED` (RESOLVED terminal); `OPEN`/`ACKNOWLEDGED` may go straight to
+  `RESOLVED`; `REPROCESSING` may fall back to `OPEN`. Transitions validated before
+  the write.
+- **Shared operator actions:** `acknowledge` + `resolve` (both halves);
+  `start_reprocess` is **payload-only** — a control anomaly raises
+  `UnsupportedActionError` (control has no reprocess; payload `REPROCESSING` maps to
+  the existing `pdgs reprocess <id>` capability).
+- **`AnomalyStore` ABC / `PostgresAnomalyStore`:** table `anomalies` (idempotent +
+  forward-compatible schema, UTC `timestamptz`), `record` / `get` / `list(*,
+  origin, state)` / `acknowledge` / `resolve` / `start_reprocess`. Errors wrap in
+  `AnomalyError`.
+- **Bridges (no segment imports):** `anomaly.mappers.anomaly_from_payload_failure`
+  (FAILED product → anomaly) and `anomaly_from_yamcs_alarm` +
+  `control_bridge.collect_anomalies` / `record_anomalies` (Yamcs OOL alarm →
+  anomaly, read-only). CLI: `sgs-ops anomalies` / `ack <id>` / `resolve <id>`
+  (dark-flagged).
+
+**Verified live (2026-06-13):** a payload-failure anomaly and a Yamcs OOL-alarm
+anomaly recorded into the shared store and listed together by `sgs-ops anomalies`
+(each labelled); `ack` advanced the payload one OPEN→ACKNOWLEDGED; `start_reprocess`
+succeeded on the payload anomaly (→REPROCESSING) and was rejected on the control
+anomaly. 62 shared tests pass, `lint-imports` KEPT.

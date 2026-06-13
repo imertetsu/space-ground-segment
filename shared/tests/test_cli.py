@@ -48,3 +48,33 @@ def test_bridge_dark_flag_off_exits_zero(
     rc = main(["bridge"])
     assert rc == 0
     assert DARK_MESSAGE in capsys.readouterr().out
+
+
+def test_anomalies_dark_flag_off_exits_zero(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    # The anomalies listing is dark-flagged — no DB touched when off.
+    monkeypatch.delenv(DARK_FLAG_ENV, raising=False)
+    rc = main(["anomalies"])
+    assert rc == 0
+    assert DARK_MESSAGE in capsys.readouterr().out
+
+
+def test_ack_dark_flag_off_exits_zero(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    # ack is dark-flagged — no DB touched when off.
+    monkeypatch.delenv(DARK_FLAG_ENV, raising=False)
+    rc = main(["ack", "anomaly:payload:p-1"])
+    assert rc == 0
+    assert DARK_MESSAGE in capsys.readouterr().out
+
+
+def test_resolve_dark_flag_off_exits_zero(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    # resolve is dark-flagged — no DB touched when off.
+    monkeypatch.delenv(DARK_FLAG_ENV, raising=False)
+    rc = main(["resolve", "anomaly:payload:p-1"])
+    assert rc == 0
+    assert DARK_MESSAGE in capsys.readouterr().out

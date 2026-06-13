@@ -9,6 +9,9 @@ Subcommands:
 - ``bridge``  : poll a running Yamcs server (read-only REST) and record control
   telemetry/alarm references into the shared catalogue. Also dark-flag-gated.
 - ``seed-demo`` (hidden): register one payload + one control demo row (Phase-0 demo).
+- ``anomalies``: list anomalies across BOTH halves (payload failures + control OOL
+  alarms), each labelled by origin (control tagged SIMULATED). Dark-flag-gated.
+- ``ack <id>`` / ``resolve <id>``: shared operator actions on an anomaly. Dark-gated.
 
 The DSN comes from ``--db`` (override) or the ``PDGS_PG_DSN`` env var. The CLI is a
 read-only consumer of the shared catalogue and imports NO segment code.
@@ -21,6 +24,8 @@ import os
 import sys
 from typing import TYPE_CHECKING
 
+from sgs_shared.anomaly.models import AnomalyState
+from sgs_shared.anomaly.repository import AnomalyError, PostgresAnomalyStore
 from sgs_shared.catalogue.repository import CatalogueError, PostgresCatalogue
 from sgs_shared.catalogue.seed import seed_demo
 from sgs_shared.control_bridge.yamcs import (
@@ -32,7 +37,8 @@ from sgs_shared.control_bridge.yamcs import (
 if TYPE_CHECKING:
     from collections.abc import Sequence
 
-    from sgs_shared.catalogue.models import CatalogueEntry
+    from sgs_shared.anomaly.models import Anomaly
+    from sgs_shared.catalogue.models import CatalogueEntry, Origin
 
 # Dark flag (CLAUDE.md §8): the shared operator surface stays dark until Epic 3 close.
 DARK_FLAG_ENV = "SGS_SHARED"
@@ -90,6 +96,55 @@ def _build_parser() -> argparse.ArgumentParser:
         dest="processor",
         default="realtime",
         help="Yamcs processor name (default: realtime).",
+    )
+
+    anomalies = sub.add_parser(
+        "anomalies",
+        help="List anomalies across both segments (dark flag: SGS_SHARED).",
+    )
+    anomalies.add_argument(
+        "--db",
+        dest="dsn",
+        default=None,
+        help="PostgreSQL DSN override (default: $PDGS_PG_DSN).",
+    )
+    anomalies.add_argument(
+        "--origin",
+        dest="origin",
+        choices=("payload", "control"),
+        default=None,
+        help="Filter by origin (default: both).",
+    )
+    anomalies.add_argument(
+        "--state",
+        dest="state",
+        choices=tuple(s.value for s in AnomalyState),
+        default=None,
+        help="Filter by anomaly state (default: all).",
+    )
+
+    ack = sub.add_parser(
+        "ack",
+        help="Acknowledge an anomaly (OPEN -> ACKNOWLEDGED) (dark flag: SGS_SHARED).",
+    )
+    ack.add_argument("anomaly_id", help="The anomaly id to acknowledge.")
+    ack.add_argument(
+        "--db",
+        dest="dsn",
+        default=None,
+        help="PostgreSQL DSN override (default: $PDGS_PG_DSN).",
+    )
+
+    resolve = sub.add_parser(
+        "resolve",
+        help="Resolve an anomaly (-> RESOLVED) (dark flag: SGS_SHARED).",
+    )
+    resolve.add_argument("anomaly_id", help="The anomaly id to resolve.")
+    resolve.add_argument(
+        "--db",
+        dest="dsn",
+        default=None,
+        help="PostgreSQL DSN override (default: $PDGS_PG_DSN).",
     )
 
     # Hidden Phase-0 demo seeder: no help= => argparse omits it from the listing,
@@ -163,6 +218,77 @@ def _cmd_bridge(dsn: str | None, yamcs_url: str, instance: str, processor: str) 
     return 0
 
 
+def _format_anomaly(anomaly: Anomaly) -> str:
+    """Render one anomaly for the operator listing (ingest-style one-liner)."""
+    return (
+        f"[{anomaly.origin_label()}]  "
+        f"{anomaly.anomaly_id}  "
+        f"{anomaly.kind}  "
+        f"{anomaly.severity}  "
+        f"{anomaly.state.value}  "
+        f"{anomaly.source_ref}"
+    )
+
+
+def _cmd_anomalies(dsn: str | None, origin: str | None, state: str | None) -> int:
+    if not _flag_is_on():
+        print(DARK_MESSAGE)
+        return 0
+    # argparse's choices guarantees origin is "payload"/"control"/None; assign the
+    # narrowed Literal explicitly so mypy is satisfied.
+    origin_filter: Origin | None = None
+    if origin == "payload":
+        origin_filter = "payload"
+    elif origin == "control":
+        origin_filter = "control"
+    state_filter = AnomalyState(state) if state is not None else None
+    try:
+        store = PostgresAnomalyStore(dsn=dsn)
+        anomalies = store.list(origin=origin_filter, state=state_filter)
+    except AnomalyError as exc:
+        print(f"sgs-ops: {exc}", file=sys.stderr)
+        return 1
+
+    if not anomalies:
+        print("(no anomalies)")
+        return 0
+
+    payload_n = sum(1 for a in anomalies if a.origin == "payload")
+    control_n = sum(1 for a in anomalies if a.origin == "control")
+    print(f"anomalies: {len(anomalies)} ({payload_n} payload, {control_n} control):")
+    for anomaly in anomalies:
+        print(_format_anomaly(anomaly))
+    return 0
+
+
+def _cmd_ack(dsn: str | None, anomaly_id: str) -> int:
+    if not _flag_is_on():
+        print(DARK_MESSAGE)
+        return 0
+    try:
+        store = PostgresAnomalyStore(dsn=dsn)
+        store.acknowledge(anomaly_id)
+    except AnomalyError as exc:
+        print(f"sgs-ops: {exc}", file=sys.stderr)
+        return 1
+    print(f"acknowledged anomaly {anomaly_id}")
+    return 0
+
+
+def _cmd_resolve(dsn: str | None, anomaly_id: str) -> int:
+    if not _flag_is_on():
+        print(DARK_MESSAGE)
+        return 0
+    try:
+        store = PostgresAnomalyStore(dsn=dsn)
+        store.resolve(anomaly_id)
+    except AnomalyError as exc:
+        print(f"sgs-ops: {exc}", file=sys.stderr)
+        return 1
+    print(f"resolved anomaly {anomaly_id}")
+    return 0
+
+
 def _cmd_seed_demo(dsn: str | None) -> int:
     if not _flag_is_on():
         print(DARK_MESSAGE)
@@ -186,6 +312,12 @@ def main(argv: Sequence[str] | None = None) -> int:
         return _cmd_status(args.dsn)
     if args.command == "bridge":
         return _cmd_bridge(args.dsn, args.yamcs_url, args.instance, args.processor)
+    if args.command == "anomalies":
+        return _cmd_anomalies(args.dsn, args.origin, args.state)
+    if args.command == "ack":
+        return _cmd_ack(args.dsn, args.anomaly_id)
+    if args.command == "resolve":
+        return _cmd_resolve(args.dsn, args.anomaly_id)
     if args.command == "seed-demo":
         return _cmd_seed_demo(args.dsn)
     parser.error(f"unknown command: {args.command!r}")  # pragma: no cover - argparse guards

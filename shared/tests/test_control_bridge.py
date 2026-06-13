@@ -10,9 +10,15 @@ from __future__ import annotations
 from datetime import UTC, datetime
 from typing import Any
 
+from sgs_shared.anomaly.models import Anomaly, AnomalyState
+from sgs_shared.anomaly.repository import AnomalyStore
 from sgs_shared.catalogue.models import CatalogueEntry, Origin, Provenance
 from sgs_shared.catalogue.repository import Catalogue
-from sgs_shared.control_bridge.yamcs import YamcsControlBridge, record_references
+from sgs_shared.control_bridge.yamcs import (
+    YamcsControlBridge,
+    record_anomalies,
+    record_references,
+)
 
 # Mocked Yamcs JSON shaped like the real REST responses (CONTEXT).
 _MDB_PARAMETERS: dict[str, Any] = {
@@ -195,6 +201,38 @@ class _FakeCatalogue(Catalogue):
         raise NotImplementedError  # pragma: no cover - unused
 
 
+class _FakeAnomalyStore(AnomalyStore):
+    """In-memory dict-backed :class:`AnomalyStore` for the bridge recording test."""
+
+    def __init__(self) -> None:
+        self._rows: dict[str, Anomaly] = {}
+
+    def record(self, anomaly: Anomaly) -> None:
+        self._rows[anomaly.anomaly_id] = anomaly
+
+    def get(self, anomaly_id: str) -> Anomaly | None:
+        return self._rows.get(anomaly_id)
+
+    def list(
+        self, *, origin: Origin | None = None, state: AnomalyState | None = None
+    ) -> list[Anomaly]:
+        rows = list(self._rows.values())
+        if origin is not None:
+            rows = [a for a in rows if a.origin == origin]
+        if state is not None:
+            rows = [a for a in rows if a.state is state]
+        return sorted(rows, key=lambda a: (a.opened_at, a.anomaly_id))
+
+    def acknowledge(self, anomaly_id: str) -> None:  # pragma: no cover - unused here
+        raise NotImplementedError
+
+    def resolve(self, anomaly_id: str) -> None:  # pragma: no cover - unused here
+        raise NotImplementedError
+
+    def start_reprocess(self, anomaly_id: str) -> None:  # pragma: no cover - unused here
+        raise NotImplementedError
+
+
 def test_record_references_registers_each_collected_entry() -> None:
     bridge = YamcsControlBridge(fetch_json=_fetch_json)
     catalogue = _FakeCatalogue()
@@ -204,3 +242,50 @@ def test_record_references_registers_each_collected_entry() -> None:
     assert len(listed) == 5
     assert all(e.origin == "control" for e in listed)
     assert all(e.simulated is True for e in listed)
+
+
+def test_collect_anomalies_yields_control_ool_alarms() -> None:
+    # The anomaly view of the SAME archived alarms: origin=control, simulated=True,
+    # kind=ool_alarm, and source_ref == the yamcs:// alarm locator (catalogue linkage).
+    bridge = YamcsControlBridge(fetch_json=_fetch_json)
+    anomalies = bridge.collect_anomalies()
+    assert len(anomalies) == 2
+    by_id = {a.anomaly_id: a for a in anomalies}
+    obc = by_id["yamcs://myproject/alarms/SGS/obc_temp/1"]
+    bat = by_id["yamcs://myproject/alarms/SGS/battery_voltage/2"]
+
+    for a in anomalies:
+        assert a.origin == "control"
+        assert a.simulated is True
+        assert a.kind == "ool_alarm"
+        # source_ref IS the yamcs:// alarm locator (== anomaly_id for control).
+        assert a.source_ref == a.anomaly_id
+        assert a.source_ref.startswith("yamcs://myproject/alarms/")
+
+    assert obc.state is AnomalyState.OPEN  # acknowledged: False
+    assert obc.severity == "CRITICAL"
+    assert obc.opened_at == datetime(2026, 6, 13, 9, 31, tzinfo=UTC)
+    assert bat.state is AnomalyState.ACKNOWLEDGED  # acknowledged: True
+
+
+def test_collect_anomalies_leaks_no_telemetry_value() -> None:
+    # AC1.3 invariant for the anomaly view: only locators + state, never a value.
+    bridge = YamcsControlBridge(fetch_json=_fetch_json)
+    for a in bridge.collect_anomalies():
+        haystack = " ".join([a.anomaly_id, a.source_ref, a.severity, a.detail or "", a.state.value])
+        assert "triggerValue" not in haystack
+        assert "currentValue" not in haystack
+        assert "floatValue" not in haystack
+        for leaked in ("88.5", "91.2", "6.1", "6.0"):
+            assert leaked not in haystack
+
+
+def test_record_anomalies_records_each_collected_anomaly() -> None:
+    bridge = YamcsControlBridge(fetch_json=_fetch_json)
+    store = _FakeAnomalyStore()
+    count = record_anomalies(store, bridge)
+    assert count == 2
+    listed = store.list()
+    assert len(listed) == 2
+    assert all(a.origin == "control" for a in listed)
+    assert all(a.simulated is True for a in listed)
