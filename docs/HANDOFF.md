@@ -2,130 +2,81 @@
 
 > Single source of project state. Living snapshot — rewritten/pruned at the end of
 > every epic, never endlessly appended. Cap ~150 lines. Read this first when
-> re-entering the project after a gap. Full methodology lives in `CLAUDE.md`.
+> re-entering the project after a gap. Full methodology + conventions: `CLAUDE.md`.
 
-_Last updated: 2026-06-13 — Epic 1 (payload) COMPLETE incl. REAL-data validation (PASS); awaiting epic-close decision._
+_Last updated: 2026-06-13 — Epic 1 (payload) CLOSED and merged to `main`._
 
 ## Stack snapshot
 
-- **Project:** "Mini Space Ground Segment" — portfolio ground segment. Two halves
-  (PDGS payload / FOS control) + shared layers + 3D view. Build epic-by-epic.
-- **Now building:** Epic 1 = `payload/` (PDGS), Python. Other segments are
-  placeholders until their epics (control = Epic 2, shared = Epic 3, viz = Epic 4).
-- **Stack:** Python 3.11 (payload) · Java 17 + Yamcs (control, later) ·
-  PostgreSQL (shared, later) · CesiumJS/Three.js (viz, later) · Docker · CI:
-  GitLab (`.gitlab-ci.yml`) canonical + GitHub Actions mirror.
-- **Quality gates (payload, run from `payload/`):** `ruff check .` ·
-  `ruff format --check .` · `mypy src` · `pytest` · `lint-imports` ·
-  `docker compose build payload`. All green at Phase 0.
-- **Type-check baseline:** `mypy --strict` = **0 errors** (file count grows per
-  phase). Any new error blocks a phase.
+- **Project:** "Mini Space Ground Segment" — portfolio ground segment (PDGS payload
+  + FOS control + shared layers + 3D view). Built epic-by-epic.
+- **Done:** Epic 1 = `payload/` (PDGS, Python). **Pending:** Epic 2 control
+  (Java/Yamcs), Epic 3 shared layers, Epic 4 3D viz — `control/`/`shared/`/`viz/`
+  are placeholders.
+- **Stack:** Python 3.11 · (later) Java 17 + Yamcs · PostgreSQL · CesiumJS · Docker
+  · CI: GitLab (`.gitlab-ci.yml`) + GitHub Actions mirror.
+- **Payload gates (from `payload/`):** `ruff check .` · `ruff format --check .` ·
+  `mypy src` · `pytest` · `lint-imports` · `docker compose build payload`.
+  Baseline: `mypy --strict` = **0 errors**; 141 tests pass.
 
 ## Active feature flags
 
-- None yet. (Unfinished epic work ships dark; flags flip on the epic's last phase.)
+- None.
 
 ## In-flight work
 
-- **Epic 1 / Phase 0 DONE** (commit on `epic/payload`): skeleton, gates, CI,
-  Dockerfile/compose, ECSS docs + spec.
-- **Epic 1 / Phase 1 DONE (offline/mock)** on `epic/payload`: catalogue (sqlite,
-  FROZEN `Product`/`ProductStatus`/`Provenance` + `Catalogue` ABC), ingestion
-  (`DataStoreClient` ABC, `OfflineDataStoreClient` default + `EumdacClient`,
-  `make_client` OFFLINE-by-default, integrity sha256, `ingest` with dead-letter
-  routing), FROZEN L1-reader contract (`L1Scene`/`read_l1_rbt`) + `L2Reference`,
-  tiny **labelled-synthetic** SLSTR fixtures + deterministic generator, CLI
-  `ingest`/`status`. 48 tests; gates green; mypy --strict 0 (19 files).
-- **Epic 1 / Phase 2 DONE (offline/mock)** on `epic/payload`: versioned config
-  (`ProcessingConfig`, tomllib; `config/default.toml` = cited MCSST coeffs,
-  `config/fixture.toml` = synthetic demo coeffs), `screen_clouds` (threshold +
-  L1 flag), `retrieve_sst` (N2 split-window, NaN over cloud, out-of-range
-  flagged), FROZEN `DerivedSstProduct` + netCDF writer + `process_scene`
-  orchestration (stamps provenance, registers `SST_L2_DERIVED` PROCESSED), CLI
-  `process`. 67 tests; gates green; mypy --strict 0.
-- **Decision (user):** build payload with **mock data now**, switch to real data
-  when the API key arrives. Real-data run is the only remaining gate to true
-  "Epic 1 done".
-- **Epic 1 / Phase 3 DONE (offline/mock)** on `epic/payload`: validation
-  (KDTree NN co-location + quality filter, bias/RMSE/std/%within stats, FROZEN
-  `ValidationResult`, threshold gate → non-zero exit, Markdown report +
-  difference.png + validation.json), versioned `[validation]` thresholds, real
-  **IV&V coverage suite** (all 19 REQ → collectable passing test, enforced via
-  `pytest --collect-only`), CLI `validate`. 107 tests; gates green; mypy 0.
-  First validation run (fixtures): bias −0.0497 K, RMSE 0.0508 K, 100% within
-  ±2 K, 1186 matchups → PASS (see SVR).
-- **Epic 1 / Phase 4 DONE (offline/mock)** on `epic/payload`: new `operations`
-  layer (`reprocess.py`); operator CLI `run` (end-to-end ingest→process→validate),
-  `reprocess <id>`, `dead-letter`, enriched `status` (filters + per-product
-  config_version). Layering now `cli → operations → validation → processing →
-  ingestion → catalogue → config`. **127 tests**; gates green; mypy 0 (30 files).
-  Operations guide + payload README finalized.
-- **Real-data activation DONE (2026-06-13)** on `epic/payload`: real EUMETSAT
-  auth + `eumdac` search/download work; fixed real path (zip→`.SEN3` extract with
-  Windows MAX_PATH-safe hashed subdir; `read_l2_wst` globs the GHRSST netCDF +
-  squeezes `time`; `search` gains geo/timeliness/limit; co-location bbox subset
-  for full-scene scale). **141 tests**; gates green; mypy 0 (30 files). **REAL
-  validation run PASS:** real S3A SLSTR L1 vs official L2 WST → 330,274 matchups,
-  bias −0.85 K, RMSE 1.22 K, 91.6% within ±2 K (see SVR). Real cloud screening =
-  BT threshold only (`use_l1_cloud_flag=false` in default.toml; real `cloud_in`
-  bit semantics TBD).
-- **Epic 1 is functionally COMPLETE** (mock + real). All 19 REQ pass; IV&V gate
-  green; end-to-end `pdgs run` PASSES on fixtures; real validation PASSES.
-- **Epic close pending a user checkpoint** (project brief: "checkpoint after each
-  epic"): on go-ahead, delete the ephemeral `docs/specs/payload.md` in the final
-  commit, prune this HANDOFF, and merge `epic/payload` → `main`.
-- **Next (after close): Epic 2** — FOS control (Java + Yamcs + CCSDS/PUS sim).
+- None. Epic 1 is complete and on `main`.
+
+## Epic 1 (payload) — outcome
+
+- Full PDGS chain: eumdac ingest → catalogue (sqlite) → cloud screen + simplified
+  **N2 split-window SST** (cited MCSST coeffs) → validate vs official L2 WST →
+  report; operator CLI (`run`/`ingest`/`process`/`validate`/`status`/`reprocess`/
+  `dead-letter`). Layering `cli>operations>validation>processing>ingestion>
+  catalogue>config` (import-linter). All 19 REQ-* covered; IV&V coverage gate.
+- **Validated on REAL data:** real S3A SLSTR L1 vs official SL_2_WST → 330,274
+  matchups, **bias −0.85 K, RMSE 1.22 K, 91.6 % within ±2 K → PASS**. Numbers are
+  honest for a documented, simplified, cross-sensor algorithm (NOT operational).
+- Offline demo runs on tiny labelled-**synthetic** fixtures with `config/fixture.toml`.
 
 ## Recent decisions worth remembering
 
-- Stack/architecture pinned in `CLAUDE.md §0` (modular monorepo, two bounded
-  contexts + shared layer; payload layered cli→…→config, enforced by import-linter).
-- Deliverables language = **English**; payload timeliness = **NTC**; CI = GitLab
-  canonical + GitHub mirror; remote will be **GitHub** (not yet created/pushed —
-  do not publish without the user's OK).
-- Verified SLSTR collection IDs: L1 `EO:EUM:DAT:0411` (`SL_1_RBT`), L2
-  `EO:EUM:DAT:0412` (`SL_2_WST`). In `docs/icd/ICD.md`.
-- **Open (for the user):** (a) EUMETSAT credentials; (b) sign-off on validation
-  acceptance thresholds proposed in `docs/specs/payload.md §7`; (c) AOI/scene for
-  the demo matchup; (d) confirm nadir-only MVP. None block Phase 0.
-- SST split-window **coefficient source is a real TBD** for Phase 2 — must cite a
-  public reference; do not invent coefficients.
+- Language = English; timeliness = NTC; CI = GitLab + GitHub mirror; remote will be
+  **GitHub** (not yet created/pushed — do not publish without the user's OK).
+- Verified collection IDs: L1 `EO:EUM:DAT:0411` (`SL_1_RBT`), L2 `EO:EUM:DAT:0412`
+  (`SL_2_WST`) — `docs/icd/ICD.md`.
+- Real cloud screening uses the S8 BT threshold only (`default.toml`
+  `use_l1_cloud_flag=false`; real `cloud_in` bit semantics TBD).
+- Commits do **not** include a Claude co-author trailer (user disabled
+  `includeCoAuthoredBy`).
 
-## Real-data follow-ups (working, but to improve later)
+## Follow-ups (non-blocking)
 
-- DONE: zip→`.SEN3` extraction; WST netCDF located by glob; `search` geo/NTC/limit;
-  co-location bbox subset for scale.
-- Integrity check in `ingest` is a self-consistency sha256 (no external expected
-  digest); wire the Data Store-provided checksum/MD5 as the expected value.
-- Confirm + decode the real `cloud_in`/`confidence_in`/`l2p_flags` bit semantics
-  (real cloud screening currently uses the S8 BT threshold only).
-- Scene/AOI selection is manual (a script); could be a `pdgs fetch` command.
-- Real EO data + reports live under `data/` and `D:/sgs` (gitignored / scratch) —
-  safe to delete to reclaim disk; regenerate with creds.
+- Wire the Data Store-provided checksum as the integrity expected digest.
+- Decode the real SLSTR `cloud_in`/`confidence_in`/`l2p_flags` bit semantics.
+- A `pdgs fetch` command for scene/AOI selection (currently a manual script).
 
 ## Known gotchas
 
-- **numpy/netCDF4 ABI RuntimeWarning** ("ndarray size changed") on import is
-  benign (wheel build mismatch), not a failure.
-- **Avast TLS interception** on this machine breaks `pip` cert verification (host
-  AND inside Docker). Host venv install works by pointing pip at a Windows CA
-  bundle (`PIP_CERT`/`SSL_CERT_FILE` → exported `Cert:\*\Root`). Local
-  `docker compose build` needs the CA supplied to the build or Avast HTTPS
-  scanning disabled. **CI runners are unaffected** (no interception) — the
-  committed `Dockerfile` is intentionally clean.
-- Windows host: PowerShell default; Bash available. `.gitattributes` pins LF.
-- `.venv/`, `data/`, `*.nc`, `*.pem` are gitignored — never commit creds or EO data.
+- **EUMETSAT creds** live in `.env` (gitignored) and work; network/Bash needs
+  `dangerouslyDisableSandbox` + the Windows CA bundle (Avast TLS interception).
+- **Avast TLS interception** breaks `pip` cert verification (host + Docker): point
+  pip at a Windows CA bundle (`PIP_CERT`/`SSL_CERT_FILE`); CI runners are
+  unaffected (committed `Dockerfile` is clean).
+- numpy/netCDF4 ABI import RuntimeWarning is benign.
+- Real EO data/reports under `data/` + `D:/sgs` (gitignored/scratch — deletable).
+- `.venv/`, `data/`, `*.nc`, `*.pem` are gitignored — never commit creds/EO data.
 
 ## Where to find things
 
-- Methodology & conventions, pinned params, gate commands → `CLAUDE.md`
+- Methodology, conventions, pinned params, gates → `CLAUDE.md`
 - Agent roster → `.claude/agents/` (`payload-developer` exists; control/viz later)
 - Requirements / interfaces / verification → `docs/srd`, `docs/icd`, `docs/svp-svr`
-- In-flight Epic 1 spec (ephemeral) → `docs/specs/payload.md`
-- Payload code + gates → `payload/` (`payload/README.md` for the quickstart)
+- Operations → `docs/operations/operations-guide.md`
+- Payload code → `payload/` (`payload/README.md` quickstart)
 
 ## Next step
 
-- **Close Epic 1** (awaiting user OK): delete `docs/specs/payload.md`, prune this
-  HANDOFF to a lean snapshot, merge `epic/payload` → `main`. Then **Epic 2** (FOS
-  control: Java + Yamcs + CCSDS/PUS simulator).
+- **Epic 2 — FOS control:** spacecraft simulator emitting CCSDS/PUS → Yamcs + XTCE
+  MIB → decommutation → limit checking → telecommanding. Branch `epic/control`;
+  run prompt-engineer → product-owner for `docs/specs/control.md`, then Phase 0.
