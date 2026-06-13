@@ -4,7 +4,7 @@
 > every epic, never endlessly appended. Cap ~150 lines. Read this first when
 > re-entering the project after a gap. Full methodology lives in `CLAUDE.md`.
 
-_Last updated: 2026-06-13 — Epic 1 (payload), Phase 0 (skeleton + CI) complete._
+_Last updated: 2026-06-13 — Epic 1 (payload), Phase 1 (ingestion + catalogue) complete (offline/mock)._
 
 ## Stack snapshot
 
@@ -27,13 +27,21 @@ _Last updated: 2026-06-13 — Epic 1 (payload), Phase 0 (skeleton + CI) complete
 
 ## In-flight work
 
-- **Epic 1 / Phase 0 DONE** on branch `epic/payload`: package skeleton, layered
-  module stubs, gates wired + green, CI (GitLab + GitHub mirror), Dockerfile +
-  compose, ECSS docs (SRD/ICD/SVP/architecture/operations), ephemeral spec
-  `docs/specs/payload.md`.
-- **Next: Phase 1 (ingestion + catalogue)** — but **BLOCKED on EUMETSAT Data Store
-  credentials** (decision: proceed without for now). Offline/fixture work and the
-  catalogue-schema + L1-reader contract design can start; live download cannot.
+- **Epic 1 / Phase 0 DONE** (commit on `epic/payload`): skeleton, gates, CI,
+  Dockerfile/compose, ECSS docs + spec.
+- **Epic 1 / Phase 1 DONE (offline/mock)** on `epic/payload`: catalogue (sqlite,
+  FROZEN `Product`/`ProductStatus`/`Provenance` + `Catalogue` ABC), ingestion
+  (`DataStoreClient` ABC, `OfflineDataStoreClient` default + `EumdacClient`,
+  `make_client` OFFLINE-by-default, integrity sha256, `ingest` with dead-letter
+  routing), FROZEN L1-reader contract (`L1Scene`/`read_l1_rbt`) + `L2Reference`,
+  tiny **labelled-synthetic** SLSTR fixtures + deterministic generator, CLI
+  `ingest`/`status`. 48 tests; gates green; mypy --strict 0 (19 files).
+- **Decision (user):** build payload with **mock data now**, switch to real data
+  when the API key arrives. Real-data run is the only remaining gate to true
+  "Epic 1 done".
+- **Next: Phase 2 (processing)** — cloud screening + split-window SST. Unblocked
+  (consumes the frozen L1-reader contract); the two processors can be built in
+  parallel once the product/provenance model is frozen.
 
 ## Recent decisions worth remembering
 
@@ -50,8 +58,19 @@ _Last updated: 2026-06-13 — Epic 1 (payload), Phase 0 (skeleton + CI) complete
 - SST split-window **coefficient source is a real TBD** for Phase 2 — must cite a
   public reference; do not invent coefficients.
 
+## Real-data path TODOs (when EUMETSAT credentials arrive)
+
+- `EumdacClient.download` currently writes the product stream to a single path;
+  real `SL_1_RBT`/`SL_2_WST` arrive as **zipped SAFE** → add unzip-to-folder.
+- Integrity check in `ingest` is a self-consistency sha256 (no external expected
+  digest offline); wire the Data Store-provided checksum as the expected value.
+- Confirm the real `SL_2_WST` internal netCDF filename (synthetic uses `L2P.nc`;
+  `read_l2_wst` keys on it) and the real scale/offset + flag bit semantics.
+
 ## Known gotchas
 
+- **numpy/netCDF4 ABI RuntimeWarning** ("ndarray size changed") on import is
+  benign (wheel build mismatch), not a failure.
 - **Avast TLS interception** on this machine breaks `pip` cert verification (host
   AND inside Docker). Host venv install works by pointing pip at a Windows CA
   bundle (`PIP_CERT`/`SSL_CERT_FILE` → exported `Cert:\*\Root`). Local

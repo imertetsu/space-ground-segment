@@ -22,11 +22,41 @@
 | L1 input | `EO:EUM:DAT:0411` | `EO:EUM:DAT:SENTINEL-3:SL_1_RBT___NTC` | `SL_1_RBT` | SLSTR Level 1B Radiances and Brightness Temperatures |
 | L2 reference | `EO:EUM:DAT:0412` | `EO:EUM:DAT:SENTINEL-3:SL_2_WST___NTC` | `SL_2_WST` | SLSTR Level 2 Sea Surface Temperature (SST), GHRSST L2P, IPF v07.00 |
 
-### 1.3 Product format
+### 1.3 Product format & internal netCDF structure
 
-- **SAFE format**: each product is a **folder of netCDF files** (per-band /
-  per-view / geolocation / metadata files). The reader resolves bands and
-  geolocation from the netCDF set within the SAFE folder.
+Each product is a **SAFE folder** = `xfdumanifest.xml` + a set of netCDF files.
+The reader resolves bands/geolocation from the netCDF set within the folder.
+
+**Grid-suffix convention (L1):** `in`/`io` = 1 km TIR grid, nadir/oblique;
+`an`/`ao` = 500 m grid stripe A, nadir/oblique; `bn`/`bo` = stripe B.
+
+**L1 `SL_1_RBT` files/variables consumed by the payload reader (nadir, MVP):**
+
+| File | Variable | Quantity | Unit |
+|---|---|---|---|
+| `S7_BT_in.nc` | `S7_BT_in` | TIR brightness temperature (~3.7 µm) | K |
+| `S8_BT_in.nc` | `S8_BT_in` | TIR brightness temperature (~10.8 µm) | K |
+| `S9_BT_in.nc` | `S9_BT_in` | TIR brightness temperature (~12 µm) | K |
+| `geodetic_in.nc` | `latitude_in`, `longitude_in` | geolocation (1 km grid) | deg |
+| `flags_in.nc` | `cloud_in`, `confidence_in` | cloud/quality flags | bitmask |
+
+> `S{1..6}_radiance_a{n,o}.nc` (500 m radiances) exist but are **not** used by the
+> nadir split-window SST MVP. BT variables are stored scaled (`scale_factor` /
+> `add_offset`); the reader relies on xarray `mask_and_scale` to decode to K.
+
+**L2 `SL_2_WST` variables (GHRSST L2P, single measurement netCDF):**
+
+| Variable | Quantity | Unit |
+|---|---|---|
+| `sea_surface_temperature` | sea surface temperature | K |
+| `quality_level` | per-pixel quality (0–5) | enum |
+| `sst_algorithm_type`, `l2p_flags` | algorithm / L2P flags | bitmask |
+| `lat`, `lon` | geolocation | deg |
+
+> **To verify against a real product when credentials arrive:** exact scale/offset
+> attributes, the WST internal netCDF filename, and the `quality_level` /
+> `l2p_flags` bit semantics. Synthetic test fixtures mirror this structure and
+> variable naming, and are **labelled synthetic** (see SRD §4 / §5).
 
 ### 1.4 Band → quantity → unit (L1 `SL_1_RBT`)
 

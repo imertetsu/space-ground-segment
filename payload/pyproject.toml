@@ -10,9 +10,10 @@ requires-python = ">=3.11"
 readme = "README.md"
 license = { text = "Proprietary" }
 dependencies = [
-    # Phase 0 skeleton intentionally has no runtime deps. The science stack
-    # (eumdac, xarray, netCDF4, numpy) is added in the ingestion/processing
-    # phases that actually need it — keeps Phase 0 gates fast and green.
+    "numpy>=1.26",
+    "xarray>=2024.1",
+    "netCDF4>=1.6",
+    "eumdac>=3.0",
 ]
 
 [project.optional-dependencies]
@@ -46,6 +47,11 @@ strict = true
 mypy_path = "src"
 explicit_package_bases = true
 namespace_packages = true
+
+# Third-party libs without (complete) type information.
+[[tool.mypy.overrides]]
+module = ["netCDF4.*", "eumdac.*"]
+ignore_missing_imports = true
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

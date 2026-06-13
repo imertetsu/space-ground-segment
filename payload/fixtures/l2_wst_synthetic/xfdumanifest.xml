@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- SYNTHETIC fixture manifest — NOT a real SAFE manifest. -->
+<xfdu:XFDU xmlns:xfdu="urn:ccsds:schema:xfdu:1">
+  <metadataSection>
+    <productType>SL_2_WST</productType>
+    <synthetic>true</synthetic>
+    <startTime>2024-06-13T10:00:00.000000Z</startTime>
+    <stopTime>2024-06-13T10:03:00.000000Z</stopTime>
+  </metadataSection>
+  <dataObjectSection>
+    <dataObject ID="L2P"><byteStream><fileLocation href="./L2P.nc"/></byteStream></dataObject>
+  </dataObjectSection>
+</xfdu:XFDU>

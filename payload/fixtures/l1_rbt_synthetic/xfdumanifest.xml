@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- SYNTHETIC fixture manifest — NOT a real SAFE manifest. -->
+<xfdu:XFDU xmlns:xfdu="urn:ccsds:schema:xfdu:1">
+  <metadataSection>
+    <productType>SL_1_RBT</productType>
+    <synthetic>true</synthetic>
+    <startTime>2024-06-13T10:00:00.000000Z</startTime>
+    <stopTime>2024-06-13T10:03:00.000000Z</stopTime>
+  </metadataSection>
+  <dataObjectSection>
+    <dataObject ID="S7_BT_in"><byteStream><fileLocation href="./S7_BT_in.nc"/></byteStream></dataObject>
+    <dataObject ID="S8_BT_in"><byteStream><fileLocation href="./S8_BT_in.nc"/></byteStream></dataObject>
+    <dataObject ID="S9_BT_in"><byteStream><fileLocation href="./S9_BT_in.nc"/></byteStream></dataObject>
+    <dataObject ID="geodetic_in"><byteStream><fileLocation href="./geodetic_in.nc"/></byteStream></dataObject>
+    <dataObject ID="flags_in"><byteStream><fileLocation href="./flags_in.nc"/></byteStream></dataObject>
+  </dataObjectSection>
+</xfdu:XFDU>
