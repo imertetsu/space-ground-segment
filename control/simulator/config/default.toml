@@ -1,0 +1,86 @@
+# SIMULATED spacecraft simulator — default configuration (FOS / Epic 2).
+#
+# Telemetry is SIMULATED (CCSDS/PUS-compliant in structure, synthetic in content)
+# and labelled simulated everywhere. NOT operational. All parameter values are
+# RAW COUNTS (engineering calibration lives in the XTCE MDB, Phase 2).
+# See PACKET_FORMAT.md for the frozen decode contract and raw<->eng factors.
+
+[udp]
+host = "127.0.0.1"   # Yamcs UdpTmDataLink host
+port = 10015         # Yamcs UdpTmDataLink port (1 datagram = 1 packet)
+
+[sim]
+rate_hz = 1.0        # HK emit rate
+seed = 42            # RNG seed — deterministic dynamics given this seed
+
+# --- Per-parameter dynamics + limits (RAW COUNTS) ---------------------------
+# nominal : raw value the dynamics drift around
+# noise   : per-tick gaussian noise std-dev (raw counts)
+# drift   : slow per-tick drift (raw counts/tick)
+# soft_*/hard_* : soft & hard limits (raw counts) — mirrored in the MDB (Phase 2)
+
+[parameters.battery_voltage]   # eng V = raw * 0.001 (nominal ~7.8 V)
+nominal  = 7800
+noise    = 15
+drift    = 0
+soft_min = 7200
+soft_max = 8400
+hard_min = 6800
+hard_max = 8600
+
+[parameters.battery_current]   # eng A = raw * 0.001 (nominal ~1.0 A)
+nominal  = 1000
+noise    = 30
+drift    = 0
+soft_min = 400
+soft_max = 2200
+hard_min = 0
+hard_max = 3000
+
+[parameters.obc_temp]          # eng degC = raw * 0.01 (nominal 20.0 degC)
+nominal  = 2000
+noise    = 10
+drift    = 0
+soft_min = 0
+soft_max = 5000
+hard_min = -2000
+hard_max = 8000
+
+[parameters.battery_temp]      # eng degC = raw * 0.01 (nominal 15.0 degC)
+nominal  = 1500
+noise    = 8
+drift    = 0
+soft_min = 0
+soft_max = 4000
+hard_min = -2000
+hard_max = 6000
+
+[parameters.reaction_wheel_speed]  # eng RPM = raw * 1 (nominal ~3000 RPM)
+nominal  = 3000
+noise    = 40
+drift    = 0
+soft_min = 1000
+soft_max = 6000
+hard_min = -8000
+hard_max = 8000
+
+# --- Anomaly injection (REQ-SIM-04) -----------------------------------------
+# Each scenario: enabled on/off + rate (per-tick push in raw counts toward/past
+# the limit). All OFF by default → nominal stream. Toggle one to drive the
+# relevant raw value past its limit and emit the corresponding PUS-5 event.
+
+[anomalies.battery_undervoltage]   # drives battery_voltage down past hard_min
+enabled = false
+rate    = 80
+
+[anomalies.obc_overtemp]           # drives obc_temp up past hard_max
+enabled = false
+rate    = 200
+
+[anomalies.rw_overspeed]           # drives reaction_wheel_speed up past hard_max
+enabled = false
+rate    = 250
+
+[anomalies.mode_to_safe]           # forces spacecraft_mode -> SAFE
+enabled = false
+rate    = 0

@@ -35,11 +35,19 @@ _Last updated: 2026-06-13 — Epic 1 CLOSED (on `main`); Epic 2 (control) Phase 
 - Phase 0 uses the **stock quickstart** MDB/simulator to prove the toolchain. Our
   mission HK params, **labelled** simulator, calibration, limits, commands = Phases
   1–3. Pinned: simulator=Python, Yamcs via `mvnw`, UDP transport, XTCE MDB.
-- **Next: Phase 1 (simulator)** — periodic HK (PUS-3) stream, realistic dynamics +
-  configurable anomaly injection, PUS-5 events; freeze the packet/APID field-map.
-  (The 3 ESCALATED decisions in `docs/specs/control.md §4` — HK param set, anomaly
-  scenarios, Yamcs web UI as operator surface — bind at Phase 1; proposed defaults
-  recommended.)
+- **Epic 2 / Phase 1 DONE** on `epic/control`: our SIMULATED Python simulator
+  (`control/simulator/`, `sgs_sim`) emits CCSDS+PUS-C packets over UDP — periodic
+  PUS-3 HK (6-param set, raw counts), seeded dynamics, 4 configurable anomaly
+  scenarios, PUS-5 events. 56 tests; ruff/mypy --strict 0. **Packet/APID decode
+  contract FROZEN** (ICD §2.5 + `control/simulator/PACKET_FORMAT.md`): HK APID 100
+  / 25 octets, EVENT APID 101. The 3 ESCALATED decisions adopted as proposed.
+  **Verified:** live Yamcs ingested our HK stream (`udp-in` count advanced, no
+  SHORT_PACKET); seq-jump warnings were only APID-100 collision with residual
+  quickstart traffic (gone once our MDB replaces the quickstart's).
+- **Next: Phase 2 (MDB + decommutation + limits)** — replace the quickstart XTCE
+  with our mission MDB (the 6 HK params, raw→eng calibrators, soft/hard limits)
+  decoding APID 100 per ICD §2.5; Yamcs decommutates to engineering units; limit
+  checks raise OOL alarms on the injected anomalies. Run ONLY our simulator.
 
 ## Epic 1 (payload) — outcome
 
@@ -94,8 +102,8 @@ _Last updated: 2026-06-13 — Epic 1 CLOSED (on `main`); Epic 2 (control) Phase 
 
 ## Next step
 
-- **Epic 2 — Phase 1 (simulator):** build our Python CCSDS/PUS simulator in
-  `control/simulator/` — periodic PUS-3 HK stream (proposed param set), realistic
-  dynamics + configurable anomaly injection, PUS-5 events; **label telemetry
-  simulated**; freeze the packet/APID field-map (the decode contract for the MDB).
-  Confirm the 3 ESCALATED decisions (`docs/specs/control.md §4`) first.
+- **Epic 2 — Phase 2 (MDB + decommutation + limits):** write our XTCE MDB in
+  `control/yamcs/src/main/yamcs/mdb/` decoding HK APID 100 per ICD §2.5 (6 params,
+  raw→eng calibrators, soft/hard limits); point Yamcs at it (replacing the
+  quickstart MDB); verify decommutation to engineering units + OOL alarms on the
+  injected anomalies, running ONLY `control/simulator` (`sgs-sim`).

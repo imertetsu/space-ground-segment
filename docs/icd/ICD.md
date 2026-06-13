@@ -170,3 +170,28 @@ in structure and **labelled "simulated" everywhere** (data, web UI, logs,
 reports, docs). The Python simulator (`control/simulator/`) frames the CCSDS +
 PUS packets described above and emits them over UDP; nothing here is real
 spacecraft data.
+
+### 2.5 FROZEN Phase 1 packet contract (TM)
+
+Frozen 2026-06-13 (Epic 2 Phase 1). The **authoritative byte-level spec** is
+`control/simulator/PACKET_FORMAT.md`; the MDB (Phase 2) decodes against it. All
+fields big-endian.
+
+| Item | Value |
+|---|---|
+| APIDs | HK = **100** (`0x064`); EVENT = **101** (`0x065`) |
+| Primary header | 6 octets (§2.1); `secondaryHeaderFlag=1`; `seqFlags=0b11`; per-APID seq count |
+| PUS-C secondary header | 7 octets; octet0 = `0x20` (pusVersion `2` \| timeRefStatus `0`), then serviceType, messageSubtype, messageTypeCounter (u16), destinationId (u16) |
+| HK packet | service **3** / subtype **25**; total **25 octets** (`packetDataLength=18`); data = `structureId(u8=1)` + `battery_voltage(u16)` + `battery_current(u16)` + `obc_temp(i16)` + `battery_temp(i16)` + `reaction_wheel_speed(i16)` + `spacecraft_mode(u8 enum 0=SAFE/1=NOMINAL/2=PAYLOAD)` |
+| HK raw→eng | voltage = raw×0.001 V · current = raw×0.001 A · obc_temp/battery_temp = raw×0.01 °C · reaction_wheel_speed = raw×1 RPM |
+| EVENT packet | service **5**; subtype 1/2/3/4 = info/low/medium/high; data = `eventId(u16)` + `context(i16)` (eventId catalogue in `PACKET_FORMAT.md`) |
+
+**Documented simplifications:** (1) no PUS **time** field in the secondary header —
+Yamcs `MyPacketPreprocessor` uses wallclock; (2) a single fixed HK structure
+(`structureId=1`) rather than dynamically-defined service-3 structure reports.
+
+**Phase 1 verified (2026-06-13):** the simulator's HK stream (APID 100, 25-octet
+packets) is ingested by the live Yamcs `UdpTmDataLink` (`udp-in dataInCount`
+advanced, no `SHORT_PACKET` errors). Decommutation to named engineering
+parameters lands in Phase 2 (our XTCE MDB replaces the quickstart's; APID 100 =
+our HK).
