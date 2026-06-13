@@ -21,6 +21,12 @@ DEFAULT_HOST = "127.0.0.1"
 DEFAULT_PORT = 10015
 """Yamcs UdpTmDataLink default port (1 datagram = 1 packet)."""
 
+DEFAULT_TC_HOST = "127.0.0.1"
+"""Bind host for the TC receiver (where Yamcs' udp-out sends TCs)."""
+
+DEFAULT_TC_PORT = 10025
+"""Yamcs UdpTcDataLink default port — the simulator binds here to receive TCs."""
+
 DEFAULT_RATE_HZ = 1.0
 DEFAULT_SEED = 42
 
@@ -78,6 +84,8 @@ class SimConfig:
 
     host: str = DEFAULT_HOST
     port: int = DEFAULT_PORT
+    tc_host: str = DEFAULT_TC_HOST
+    tc_port: int = DEFAULT_TC_PORT
     rate_hz: float = DEFAULT_RATE_HZ
     seed: int = DEFAULT_SEED
     parameters: dict[str, ParameterConfig] = field(default_factory=dict)
@@ -88,6 +96,8 @@ class SimConfig:
         *,
         host: str | None = None,
         port: int | None = None,
+        tc_host: str | None = None,
+        tc_port: int | None = None,
         rate_hz: float | None = None,
         seed: int | None = None,
     ) -> SimConfig:
@@ -96,6 +106,8 @@ class SimConfig:
             self,
             host=self.host if host is None else host,
             port=self.port if port is None else port,
+            tc_host=self.tc_host if tc_host is None else tc_host,
+            tc_port=self.tc_port if tc_port is None else tc_port,
             rate_hz=self.rate_hz if rate_hz is None else rate_hz,
             seed=self.seed if seed is None else seed,
         )
@@ -145,9 +157,13 @@ def from_dict(raw: dict[str, Any]) -> SimConfig:
         mode_to_safe=_parse_anomaly(anomalies_raw.get("mode_to_safe")),
     )
 
+    tc = raw.get("tc", {})
+
     return SimConfig(
         host=str(udp.get("host", DEFAULT_HOST)),
         port=int(udp.get("port", DEFAULT_PORT)),
+        tc_host=str(tc.get("host", DEFAULT_TC_HOST)),
+        tc_port=int(tc.get("port", DEFAULT_TC_PORT)),
         rate_hz=float(sim.get("rate_hz", DEFAULT_RATE_HZ)),
         seed=int(sim.get("seed", DEFAULT_SEED)),
         parameters=parameters,

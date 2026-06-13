@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import logging
 import socket
+import threading
 import time
 from collections.abc import Callable
 
@@ -21,6 +22,7 @@ from sgs_sim.config import SimConfig
 from sgs_sim.events import build_event_packet
 from sgs_sim.hk import build_hk_packet
 from sgs_sim.pus import MessageTypeCounter
+from sgs_sim.receiver import TcReceiver, start_receiver_thread
 
 logger = logging.getLogger("sgs_sim")
 
@@ -54,8 +56,9 @@ def run_loop(
     sender: UdpSender | None = None,
     sleep: Callable[[float], None] = time.sleep,
     now: Callable[[], float] = time.monotonic,
+    enable_tc: bool = True,
 ) -> int:
-    """Run the periodic emit loop.
+    """Run the periodic emit loop (and, by default, the concurrent TC receiver).
 
     Args:
         config: the resolved simulator configuration.
@@ -64,6 +67,9 @@ def run_loop(
             (and closed on exit).
         sleep: injectable sleep (for tests).
         now: injectable monotonic clock (for tests).
+        enable_tc: start the UDP telecommand receiver (binds ``config.tc_port``)
+            concurrently with the HK loop. The receiver applies accepted TCs to
+            the model and emits PUS service-1 ACKs over the same TM link.
 
     Returns:
         The number of HK packets emitted.
@@ -76,6 +82,15 @@ def run_loop(
     seq_counter = SequenceCounter()
     msg_counter = MessageTypeCounter()
     period = 1.0 / config.rate_hz if config.rate_hz > 0 else 0.0
+
+    stop = threading.Event()
+    tc_thread = None
+    if enable_tc:
+        # ACKs go out over the same TM link (UDP sendto is thread-safe).
+        tc_receiver = TcReceiver(model, sender.send)
+        tc_thread = start_receiver_thread(
+            tc_receiver, host=config.tc_host, port=config.tc_port, stop=stop
+        )
 
     hk_count = 0
     start = now()
@@ -103,6 +118,9 @@ def run_loop(
             if period > 0:
                 sleep(period)
     finally:
+        stop.set()
+        if tc_thread is not None:
+            tc_thread.join(timeout=2.0)
         if owns_sender:
             sender.close()
 

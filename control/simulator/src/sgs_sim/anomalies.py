@@ -20,6 +20,7 @@ per crossing (re-armed when the value returns inside the soft band).
 
 from __future__ import annotations
 
+import threading
 from dataclasses import dataclass
 
 from sgs_sim import dynamics as dyn
@@ -52,18 +53,39 @@ class Model:
         self._overtemp_armed = True
         self._overspeed_armed = True
         self._prev_mode: SpacecraftMode = self._dyn.mode
+        # A pending commanded mode (set by a received SET_MODE TC from another
+        # thread), applied at the start of the next tick. Guarded by a lock since
+        # the TC receiver and the HK loop run concurrently.
+        self._command_lock = threading.Lock()
+        self._commanded_mode: SpacecraftMode | None = None
 
     @property
     def dynamics(self) -> Dynamics:
         """The underlying (deterministic) dynamics model."""
         return self._dyn
 
+    def command_mode(self, mode: SpacecraftMode) -> None:
+        """Queue a commanded spacecraft mode (thread-safe; applied next tick).
+
+        Called by the TC receiver thread when a valid SET_MODE telecommand is
+        accepted; the next :meth:`step` adopts it so subsequent HK reflects it.
+        """
+        with self._command_lock:
+            self._commanded_mode = mode
+
     def step(self) -> TickResult:
         """Advance the model one tick; return HK params + triggered events."""
         anomalies = self._config.anomalies
 
+        # A commanded mode (from a received SET_MODE TC) takes effect this tick.
+        with self._command_lock:
+            commanded = self._commanded_mode
+            self._commanded_mode = None
+        if commanded is not None:
+            self._dyn.set_mode(commanded)
+
         # mode_to_safe: force SAFE mode while active (applied before dynamics so
-        # mode-dependent dynamics reflect it this tick).
+        # mode-dependent dynamics reflect it this tick). It overrides a command.
         if anomalies.mode_to_safe.enabled:
             self._dyn.set_mode(SpacecraftMode.SAFE)
 

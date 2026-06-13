@@ -6,8 +6,14 @@
 # See PACKET_FORMAT.md for the frozen decode contract and raw<->eng factors.
 
 [udp]
-host = "127.0.0.1"   # Yamcs UdpTmDataLink host
+host = "127.0.0.1"   # Yamcs UdpTmDataLink host (TM out, incl. PUS-1 ACKs)
 port = 10015         # Yamcs UdpTmDataLink port (1 datagram = 1 packet)
+
+[tc]
+# Telecommand receiver (Phase 3). The simulator BINDS here to receive TCs sent by
+# Yamcs' udp-out (UdpTcDataLink). Default mirrors yamcs.myproject.yaml udp-out.
+host = "127.0.0.1"   # bind host for the TC receiver
+port = 10025         # Yamcs UdpTcDataLink target port
 
 [sim]
 rate_hz = 1.0        # HK emit rate

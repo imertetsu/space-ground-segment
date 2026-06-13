@@ -1,19 +1,20 @@
-# PACKET FORMAT — FROZEN decode contract (FOS / Epic 2, Phase 1)
+# PACKET FORMAT — FROZEN decode contract (FOS / Epic 2, Phases 1 & 3)
 
-> **SIMULATED telemetry.** Every packet described here is synthetically generated
-> by `sgs-sim` (`control/simulator/`). It is **CCSDS / PUS-compliant in structure**
-> but is **not** operational spacecraft data, and is labelled *simulated*
-> everywhere (CLI banner, logs, docs). Per SRD §5.
+> **SIMULATED telemetry & telecommanding.** Every packet described here is
+> synthetically generated/consumed by `sgs-sim` (`control/simulator/`). It is
+> **CCSDS / PUS-compliant in structure** but is **not** operational spacecraft
+> data, and is labelled *simulated* everywhere (CLI banner, logs, docs). Per SRD §5.
 
 This is the **authoritative byte-level decode specification** that the Phase-1
-simulator emits and that the Phase-2 **XTCE MDB** decodes against. It is **frozen**:
-the MDB and any downstream consumer may rely on it exactly. All fields are
-**big-endian / network byte order**.
+simulator emits and that the Phase-2 **XTCE MDB** decodes against, plus the
+**Phase-3 telecommand (TC) + PUS service-1 verification ACK** contract (§§6–7). It
+is **frozen**: the MDB and any downstream consumer may rely on it exactly. All
+fields are **big-endian / network byte order**.
 
 Standards cited:
-- **CCSDS 133.0-B-2** — Space Packet Protocol (primary header).
+- **CCSDS 133.0-B-2** — Space Packet Protocol (primary header, TM and TC).
 - **ECSS-E-ST-70-41C** — PUS (Telemetry & Telecommand Packet Utilization Standard;
-  PUS-C secondary header, services 3 and 5).
+  PUS-C TM and TC secondary headers, services 3, 5, 1, and private service 132).
 
 ---
 
@@ -178,17 +179,137 @@ Total = 25 octets.
 
 ---
 
-## 6. Summary of constants for the MDB
+## 6. Telecommand (TC) packet — APID 200 (FROZEN Phase 3)
+
+> **SIMULATED telecommanding.** TCs flow **ground → spacecraft**: Yamcs' `udp-out`
+> (`UdpTcDataLink`, `localhost:10025`) sends them; the simulator's TC receiver
+> binds that port and consumes one TC per UDP datagram. Yamcs'
+> `MyCommandPostprocessor` finalizes the CCSDS **sequence count** and **packet data
+> length** after the command is built from the XTCE `CommandContainer`.
+
+### 6.1 TC CCSDS primary header — 6 octets
+
+| Word | Bits | Field | Value here |
+|---|---|---|---|
+| word0 (uint16) | 3 | Packet Version Number | `0b000` |
+| | 1 | Packet Type | `1` (**TC**) |
+| | 1 | Secondary Header Flag | `1` (PUS secondary header present) |
+| | 11 | APID | **200** (`0x0C8`) |
+| word1 (uint16) | 2 | Sequence Flags | `0b11` (unsegmented, standalone) |
+| | 14 | Packet Sequence Count | filled by the Yamcs postprocessor |
+| word2 (uint16) | 16 | Packet Data Length | = (data-field octets) − 1; filled by the postprocessor |
+
+### 6.2 PUS-C TC secondary header — 5 octets (ECSS-E-ST-70-41C)
+
+Placed at the start of the packet data field (after the 6-octet primary header).
+
+| Octet | Width | Field | Value here |
+|---|---|---|---|
+| 0 | 4 bits | PUS Version Number | `0b0010` (PUS-C, = 2) |
+| 0 | 4 bits | Acknowledgement Flags | `0b1001` (acceptance + completion) |
+| 1 | uint8 | Service Type | **132** (private command service) |
+| 2 | uint8 | Message Subtype | command id (below) |
+| 3–4 | uint16 | Source ID | `0` (ground) |
+
+→ Octet 0 is therefore **`0x29`** = `(2 << 4) | 0b1001`.
+
+**Acknowledgement flags** (bit field, ECSS-E-ST-70-41C): bit0 acceptance, bit1
+start, bit2 progress, bit3 completion. This FOS requests **acceptance +
+completion** (`0b1001`), so each TC yields a TM[1,1] then a TM[1,7] on success.
+
+### 6.3 Command set — private PUS service 132
+
+> **DOCUMENTED CHOICE — private/custom service.** ECSS-E-ST-70-41C reserves
+> service types **≥ 128 for mission-private services**. This FOS uses service
+> **132** for its (SIMULATED) command set; it is therefore non-standard by design
+> and documented as private/custom.
+
+| Command | Service / subtype | Args (after the 5-octet TC secondary header) | Validation |
+|---|---|---|---|
+| `SET_MODE` | 132 / 1 | `mode` : uint8 enum (0=SAFE, 1=NOMINAL, 2=PAYLOAD) | mode ∈ {0,1,2}; out-of-range rejected at acceptance |
+| `PING` | 132 / 2 | none | always valid |
+
+`SET_MODE` total packet length = 6 + 5 + 1 = **12 octets**; `PING` = **11 octets**.
+
+### 6.4 Request id (for verification correlation)
+
+The TC **request id** (per ECSS-E-ST-70-41C service 1) is the TC's **first 4
+octets** = CCSDS *packet id* (word0: version/type/secHdrFlag/APID) + *packet
+sequence control* (word1: seqFlags/seqCount). The simulator echoes it verbatim in
+every verification ACK so the ground (Yamcs) can correlate the verification chain
+to the command (by its CCSDS sequence count).
+
+---
+
+## 7. PUS service-1 verification ACK packet — APID 102 (FROZEN Phase 3)
+
+> **SIMULATED.** ACKs flow **spacecraft → ground** over the **same TM link** as HK
+> (`127.0.0.1:10015`, Yamcs `UdpTmDataLink`). One ACK per UDP datagram.
+
+- CCSDS TM primary header (§1) with **APID = 102** (`0x066`), `type=0` (TM),
+  `secHdrFlag=1`.
+- PUS-C **TM** secondary header (§2, 7 octets): **Service Type = 1**, Message
+  Subtype = the verification stage (below), messageTypeCounter (per-service),
+  destinationId = 0.
+- User data = the verified TC's **4-octet request id** (§6.4).
+
+| Offset | Width | Type | Field |
+|---|---|---|---|
+| 0 | 6 | — | CCSDS TM primary header (APID 102) |
+| 6 | 7 | — | PUS-C TM secondary header (service 1) |
+| 13 | 4 | bytes | `requestId` (= the verified TC's first 4 octets, §6.4) |
+
+**Total ACK packet length = 17 octets.** Packet Data Length = 11 − 1 = **10**.
+
+### Verification subtypes (ECSS-E-ST-70-41C service 1)
+
+| Subtype | Report | Emitted when |
+|---|---|---|
+| 1 | acceptance — success (TM[1,1]) | a received TC passes validation |
+| 2 | acceptance — failure (TM[1,2]) | a received TC fails validation (unknown service/subtype, out-of-range arg) |
+| 7 | completion — success (TM[1,7]) | an accepted TC has been applied |
+| 8 | completion — failure (TM[1,8]) | reserved (defined; not currently emitted — both commands always complete) |
+
+**Per-TC sequence (simulator behaviour):**
+
+```
+valid TC   ->  TM[1,1] acceptance-success
+               apply (SET_MODE changes spacecraft_mode; PING = no-op)
+           ->  TM[1,7] completion-success
+invalid TC ->  TM[1,2] acceptance-failure         (rejected; nothing applied)
+```
+
+`SET_MODE` drives the simulator's `spacecraft_mode`, so subsequent HK packets
+(§3) report the commanded mode, and a mode change emits the usual PUS-5
+`EVT_MODE_CHANGE` (and `EVT_MODE_SAFE` for SAFE).
+
+> **DOCUMENTED SIMPLIFICATION — request-id payload.** A full ECSS service-1 report
+> carries the request id as the structured *packet id + packet sequence control*
+> plus (for failures) a failure-code/parameters. This contract ships the **request
+> id only** (the 4 raw octets) and signals failure via the **subtype** (2/8); no
+> separate failure code is encoded. This is sufficient for Yamcs to correlate the
+> chain by the command's CCSDS sequence count.
+
+---
+
+## 8. Summary of constants for the MDB
 
 | Constant | Value |
 |---|---|
-| UDP target (default) | 127.0.0.1:10015 (Yamcs `UdpTmDataLink`) |
+| UDP TM target (default) | 127.0.0.1:10015 (Yamcs `UdpTmDataLink`; HK, EVENT, ACK) |
+| UDP TC target (default) | 127.0.0.1:10025 (Yamcs `UdpTcDataLink`; sim binds to receive) |
 | Datagram rule | 1 UDP datagram = 1 CCSDS packet |
 | HK APID / packet length | 100 / 25 octets |
 | EVENT APID / packet length | 101 / 17 octets |
-| PUS version | C (0b0010); secondary-header octet0 = 0x20 |
+| TC APID | **200** (`0x0C8`) — ground → spacecraft |
+| ACK (verification) APID / packet length | **102** (`0x066`) / 17 octets |
+| PUS version | C (0b0010); TM secondary octet0 = 0x20; TC secondary octet0 = 0x29 |
 | HK service / subtype | 3 / 25 |
 | EVENT service / subtypes | 5 / {1 info, 2 low, 3 medium, 4 high} |
+| Command service / subtypes | **132** (private) / {1 SET_MODE, 2 PING} |
+| Verification service / subtypes | **1** / {1 accept-ok, 2 accept-fail, 7 complete-ok, 8 complete-fail} |
+| TC secondary header | 5 octets; pusVersion 2 \| ackFlags 0b1001; service, subtype, sourceId(u16=0) |
+| Request id | TC's first 4 octets (packet id + packet sequence control); echoed in ACKs |
 | Sequence count | per-APID, 14-bit, mod 16384 |
 | Message type counter | per-service, 16-bit |
 | Time field | **none** (Yamcs uses wallclock — see §2) |

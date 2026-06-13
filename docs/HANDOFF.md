@@ -51,10 +51,19 @@ _Last updated: 2026-06-13 — Epic 1 CLOSED (on `main`); Epic 2 (control) Phase 
   **Verified live:** nominal stream → correct eng values, 0 alarms; `obc_overtemp`
   anomaly → OOL alarm on `/SGS/obc_temp`. Container matches `SecHdrFlag=Present` +
   `APID=100`.
-- **Next: Phase 3 (telecommanding)** — TC set in the MDB; build/validate/send a TC
-  via Yamcs UDP TC link; simulator accepts TCs + returns PUS-1 verification ACKs;
-  Yamcs tracks the verification chain; health + OOL alarms queryable (REQ-SIM-03,
-  REQ-TMC-04/05).
+- **Epic 2 / Phase 3 DONE** on `epic/control`: telecommanding. Simulator gained
+  TC receive (UDP :10025) + execute + PUS-1 verification ACKs (`tc.py`,
+  `verification.py`, `receiver.py`; ~83 tests, mypy 0). XTCE gained CommandMetaData
+  (`SET_MODE`, `PING`, private PUS service 132) + Accepted/Complete verifiers + the
+  PUS-1 ACK TM containers (ICD §2.7). **Verified live:** `SET_MODE(SAFE)` →
+  spacecraft_mode becomes SAFE in HK; PUS-1 ACKs (APID 102) received; invalid
+  `mode` rejected at validation (HTTP 400). Verifiers are container-match (not
+  request-id-correlated — documented; fine for one command in flight).
+- **Next: Phase 4 (time seed + containerise + docs + close)** — PUS-9 time-
+  correlation concept seed; docker-compose the FOS stack (yamcs + simulator +
+  postgres placeholder); MIB summary + operations-guide control section; then
+  **close Epic 2** (delete `docs/specs/control.md`, prune HANDOFF, merge
+  `epic/control` → `main`).
 
 ## Epic 1 (payload) — outcome
 
@@ -112,8 +121,7 @@ _Last updated: 2026-06-13 — Epic 1 CLOSED (on `main`); Epic 2 (control) Phase 
 
 ## Next step
 
-- **Epic 2 — Phase 3 (telecommanding):** add a TC set to the XTCE MDB; via Yamcs,
-  build/validate/send a TC over the UDP TC link (:10025); the Python simulator
-  accepts TCs and returns PUS service-1 command-verification ACKs; Yamcs tracks
-  the verification chain; health state + OOL alarms remain queryable
-  (REQ-SIM-03, REQ-TMC-04/05).
+- **Epic 2 — Phase 4 (close):** PUS-9 time-correlation concept seed; docker-compose
+  the FOS stack (yamcs + simulator + postgres placeholder); MIB summary doc +
+  operations-guide control section; then close Epic 2 — delete
+  `docs/specs/control.md`, prune this HANDOFF, merge `epic/control` → `main`.

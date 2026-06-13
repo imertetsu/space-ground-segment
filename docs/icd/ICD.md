@@ -220,3 +220,29 @@ mode NOMINAL), all `IN_LIMITS`, 0 alarms; the `obc_overtemp` anomaly drives
 obc_temp out of limits → an OOL alarm on `/SGS/obc_temp`. (Follow-up: the
 simulator clamps raw to the hard band, so over-temp lands at the warning/critical
 boundary as WARNING — let anomalies overshoot for a clean CRITICAL.)
+
+### 2.7 FROZEN Phase 3 telecommand + verification contract
+
+Frozen 2026-06-13. Authoritative: `control/simulator/PACKET_FORMAT.md`. All
+big-endian; telecommands are SIMULATED.
+
+- **TC packet:** CCSDS primary — type **1 (TC)**, secHdrFlag 1, APID **200**
+  (`0x0C8`); PUS-C TC secondary (5 octets): octet0 `0x29` (pusVersion 2 \|
+  ackFlags `1001` = acceptance+completion), serviceType, subtype, sourceId(u16)=0;
+  then args. Yamcs `MyCommandPostprocessor` fills the CCSDS seq count + length.
+- **Command set** (private PUS service **132**): `SET_MODE` (subtype 1; arg `mode`
+  enum 0=SAFE/1=NOMINAL/2=PAYLOAD, range-checked) · `PING` (subtype 2, no args).
+- **PUS service-1 verification ACK (TM, APID 102):** service 1, subtype **1**
+  accept-success / **7** complete-success / **2** accept-fail / **8** complete-fail;
+  data = the verified TC's request id (its first 4 octets = packet id + sequence
+  control). Defined as TM containers (`Pus1AcceptanceSuccess`, …) in the MDB.
+- **Yamcs verifiers:** each command has Accepted + Complete verifiers (container
+  match on the ACK containers, `CheckWindow` ~5 s). **Simplification (documented):**
+  these are container-match, **not request-id-correlated** (the TC seq count is
+  injected post-build by the postprocessor, so XTCE can't compare it to the ACK's
+  request id) — correct for one command in flight; true correlation needs a custom
+  verifier (`Verification_RequestId` is exposed for that). 
+
+**Verified live (2026-06-13):** `SET_MODE(SAFE)` via Yamcs → simulator executes →
+`spacecraft_mode` becomes SAFE in HK; PUS-1 ACKs (APID 102) received; an
+out-of-range `mode` is rejected at validation (HTTP 400, not transmitted).

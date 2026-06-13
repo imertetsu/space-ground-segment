@@ -214,6 +214,40 @@
 					<Enumeration value="2" label="PAYLOAD" />
 				</EnumerationList>
 			</EnumeratedParameterType>
+
+			<!-- ===== PUS service-1 verification ACK types (Phase 3, TM) ===== -->
+			<!-- The PUS-C TM secondary-header serviceType octet (octet 1 of the
+			     secondary header = byte 7 = bit 56). Used to restrict ACK packets. -->
+			<IntegerParameterType name="PUS_Service_Type" signed="false">
+				<UnitSet />
+				<IntegerDataEncoding sizeInBits="8" encoding="unsigned" />
+			</IntegerParameterType>
+
+			<!-- The PUS message-subtype octet (octet 2 = byte 8 = bit 64) carries
+			     the verification stage: 1 accept-ok / 2 accept-fail / 7 complete-ok
+			     / 8 complete-fail. -->
+			<EnumeratedParameterType name="Verification_Subtype_Type">
+				<UnitSet />
+				<IntegerDataEncoding sizeInBits="8" encoding="unsigned" />
+				<EnumerationList>
+					<Enumeration value="1" label="ACCEPTANCE_SUCCESS" />
+					<Enumeration value="2" label="ACCEPTANCE_FAILURE" />
+					<Enumeration value="7" label="COMPLETION_SUCCESS" />
+					<Enumeration value="8" label="COMPLETION_FAILURE" />
+				</EnumerationList>
+			</EnumeratedParameterType>
+
+			<!-- The 4-octet request id echoed in the ACK = the verified TC's first
+			     4 octets (CCSDS packet id + packet sequence control). Exposed whole
+			     (u32) plus the embedded 14-bit TC sequence count for correlation. -->
+			<IntegerParameterType name="Verification_RequestId_Type" signed="false">
+				<UnitSet />
+				<IntegerDataEncoding sizeInBits="32" encoding="unsigned" />
+			</IntegerParameterType>
+			<IntegerParameterType name="Verification_SeqCount_Type" signed="false">
+				<UnitSet />
+				<IntegerDataEncoding sizeInBits="14" encoding="unsigned" />
+			</IntegerParameterType>
 		</ParameterTypeSet>
 
 		<ParameterSet>
@@ -237,6 +271,16 @@
 				shortDescription="Reaction wheel speed (RPM). SIMULATED." />
 			<Parameter name="spacecraft_mode" parameterTypeRef="Spacecraft_Mode_Type"
 				shortDescription="Spacecraft mode (0=SAFE/1=NOMINAL/2=PAYLOAD). SIMULATED." />
+
+			<!-- PUS service-1 verification ACK parameters (APID 102). SIMULATED. -->
+			<Parameter name="Verification_Service" parameterTypeRef="PUS_Service_Type"
+				shortDescription="PUS service type of an ACK packet (=1). SIMULATED." />
+			<Parameter name="Verification_Subtype" parameterTypeRef="Verification_Subtype_Type"
+				shortDescription="PUS-1 verification stage (1/2/7/8). SIMULATED." />
+			<Parameter name="Verification_RequestId" parameterTypeRef="Verification_RequestId_Type"
+				shortDescription="ACK request id = verified TC's first 4 octets. SIMULATED." />
+			<Parameter name="Verification_SeqCount" parameterTypeRef="Verification_SeqCount_Type"
+				shortDescription="TC sequence count embedded in the ACK request id. SIMULATED." />
 		</ParameterSet>
 
 		<ContainerSet>
@@ -315,6 +359,346 @@
 					</RestrictionCriteria>
 				</BaseContainer>
 			</SequenceContainer>
+
+			<!-- ===== PUS service-1 command-verification ACK packets (Phase 3) =====
+			     APID 102 (0x066), 17 octets. Layout (bits from container start):
+			       0-47    CCSDS TM primary header
+			       48-55   PUS-C TM secondary octet0 (0x20)
+			       56-63   serviceType (=1)            -> Verification_Service  bit 56
+			       64-71   messageSubtype (1/2/7/8)    -> Verification_Subtype  bit 64
+			       72-87   messageTypeCounter
+			       88-103  destinationId
+			       104-135 requestId (u32)             -> Verification_RequestId bit 104
+			         within requestId, the TC word1 is bits 120-135; its lower 14
+			         bits (122-135) are the TC sequence count
+			                                           -> Verification_SeqCount  bit 122
+			     SIMULATED — emitted by the simulator's TC verification layer. -->
+			<SequenceContainer abstract="true" name="Pus1AckPacket"
+				shortDescription="SIMULATED PUS service-1 verification ACK (APID 102).">
+				<EntryList>
+					<ParameterRefEntry parameterRef="Verification_Service">
+						<LocationInContainerInBits referenceLocation="containerStart">
+							<FixedValue>56</FixedValue>
+						</LocationInContainerInBits>
+					</ParameterRefEntry>
+					<ParameterRefEntry parameterRef="Verification_Subtype">
+						<LocationInContainerInBits referenceLocation="containerStart">
+							<FixedValue>64</FixedValue>
+						</LocationInContainerInBits>
+					</ParameterRefEntry>
+					<ParameterRefEntry parameterRef="Verification_RequestId">
+						<LocationInContainerInBits referenceLocation="containerStart">
+							<FixedValue>104</FixedValue>
+						</LocationInContainerInBits>
+					</ParameterRefEntry>
+					<ParameterRefEntry parameterRef="Verification_SeqCount">
+						<LocationInContainerInBits referenceLocation="containerStart">
+							<FixedValue>122</FixedValue>
+						</LocationInContainerInBits>
+					</ParameterRefEntry>
+				</EntryList>
+				<BaseContainer containerRef="TelemetryPacket">
+					<RestrictionCriteria>
+						<ComparisonList>
+							<Comparison value="Present" parameterRef="CCSDS_Packet_ID/SecHdrFlag" />
+							<Comparison value="102" parameterRef="CCSDS_Packet_ID/APID" />
+							<Comparison value="1" parameterRef="Verification_Service" />
+						</ComparisonList>
+					</RestrictionCriteria>
+				</BaseContainer>
+			</SequenceContainer>
+
+			<!-- Concrete ACK containers per stage (each restricted on the subtype),
+			     so command verifiers can reference exactly one stage's container. -->
+			<SequenceContainer name="Pus1AcceptanceSuccess"
+				shortDescription="SIMULATED PUS TM[1,1] acceptance-success ACK.">
+				<EntryList />
+				<BaseContainer containerRef="Pus1AckPacket">
+					<RestrictionCriteria>
+						<ComparisonList>
+							<Comparison value="ACCEPTANCE_SUCCESS" parameterRef="Verification_Subtype" />
+						</ComparisonList>
+					</RestrictionCriteria>
+				</BaseContainer>
+			</SequenceContainer>
+			<SequenceContainer name="Pus1AcceptanceFailure"
+				shortDescription="SIMULATED PUS TM[1,2] acceptance-failure ACK.">
+				<EntryList />
+				<BaseContainer containerRef="Pus1AckPacket">
+					<RestrictionCriteria>
+						<ComparisonList>
+							<Comparison value="ACCEPTANCE_FAILURE" parameterRef="Verification_Subtype" />
+						</ComparisonList>
+					</RestrictionCriteria>
+				</BaseContainer>
+			</SequenceContainer>
+			<SequenceContainer name="Pus1CompletionSuccess"
+				shortDescription="SIMULATED PUS TM[1,7] completion-success ACK.">
+				<EntryList />
+				<BaseContainer containerRef="Pus1AckPacket">
+					<RestrictionCriteria>
+						<ComparisonList>
+							<Comparison value="COMPLETION_SUCCESS" parameterRef="Verification_Subtype" />
+						</ComparisonList>
+					</RestrictionCriteria>
+				</BaseContainer>
+			</SequenceContainer>
+			<SequenceContainer name="Pus1CompletionFailure"
+				shortDescription="SIMULATED PUS TM[1,8] completion-failure ACK.">
+				<EntryList />
+				<BaseContainer containerRef="Pus1AckPacket">
+					<RestrictionCriteria>
+						<ComparisonList>
+							<Comparison value="COMPLETION_FAILURE" parameterRef="Verification_Subtype" />
+						</ComparisonList>
+					</RestrictionCriteria>
+				</BaseContainer>
+			</SequenceContainer>
 		</ContainerSet>
 	</TelemetryMetaData>
+
+	<!-- =====================================================================
+	     COMMAND SIDE (FOS / Epic 2 Phase 3) — SIMULATED TELECOMMANDING.
+
+	     *** SIMULATED — NOT OPERATIONAL COMMANDING ***
+	     Builds the synthetic CCSDS/PUS-C telecommands (APID 200, 0x0C8) consumed
+	     by the SGS spacecraft simulator (control/simulator/, `sgs-sim`). CCSDS /
+	     PUS compliant in STRUCTURE; nothing here commands real hardware. The
+	     FROZEN TC + PUS-1 ACK contract is control/simulator/PACKET_FORMAT.md §§6-7
+	     (verified field-by-field against control/simulator/src/sgs_sim/tc.py,
+	     pus.py, ccsds.py, verification.py).
+
+	     TC packet, big-endian:
+	       octets 0-5   CCSDS TC primary header
+	                      version 0 | type 1 (TC) | secHdrFlag 1 | APID 200
+	                      seqFlags 0b11 | seqCount (filled by postprocessor)
+	                      packetDataLength (filled by postprocessor)
+	       octets 6-10  PUS-C TC secondary header (5 octets)
+	                      octet0 0x29 = pusVersion 2 (0b0010) | ackFlags 0b1001
+	                                    (acceptance + completion)
+	                      octet1 serviceType  = 132 (private command service)
+	                      octet2 messageSubtype (command id: 1=SET_MODE, 2=PING)
+	                      octet3-4 sourceId (u16) = 0 (ground)
+	       octets 11..  application data (args)
+	                      SET_MODE: mode (uint8 enum 0=SAFE/1=NOMINAL/2=PAYLOAD)
+	                      PING:     none
+
+	     MyCommandPostprocessor (link udp-out) finalises the CCSDS sequence count
+	     (CcsdsSeqCountFiller) and the packet data length (= binary.length-7 at
+	     offset 4) AFTER the command is built here, so the seqCount and length
+	     entries below are FixedValueEntry placeholders (0) that it overwrites.
+
+	     The TC request id (PACKET_FORMAT.md §6.4) = the TC's first 4 octets
+	     (CCSDS packet id + packet sequence control). The simulator echoes it
+	     verbatim in every PUS-1 ACK; the embedded 14-bit sequence count is the
+	     only command-specific correlator. See the VerifierSet note below for what
+	     the container verifiers do and do NOT correlate.
+	===================================================================== -->
+	<CommandMetaData>
+		<ArgumentTypeSet>
+			<!-- ===== CCSDS primary-header argument types (modelled on the
+			     Yamcs quickstart command pattern, commit 3962679) ===== -->
+			<IntegerArgumentType name="CCSDS_Version_Type" signed="false">
+				<UnitSet />
+				<IntegerDataEncoding sizeInBits="3" />
+			</IntegerArgumentType>
+			<BooleanArgumentType name="CCSDS_Type_Type" zeroStringValue="TM" oneStringValue="TC">
+				<UnitSet />
+				<IntegerDataEncoding sizeInBits="1" />
+			</BooleanArgumentType>
+			<BooleanArgumentType name="CCSDS_Sec_Hdr_Flag_Type" zeroStringValue="NotPresent" oneStringValue="Present">
+				<UnitSet />
+				<IntegerDataEncoding sizeInBits="1" />
+			</BooleanArgumentType>
+			<IntegerArgumentType name="CCSDS_APID_Type" signed="false">
+				<UnitSet />
+				<IntegerDataEncoding sizeInBits="11" />
+			</IntegerArgumentType>
+			<EnumeratedArgumentType name="CCSDS_Group_Flags_Type">
+				<UnitSet />
+				<IntegerDataEncoding sizeInBits="2" />
+				<EnumerationList>
+					<Enumeration value="0" label="Continuation" />
+					<Enumeration value="1" label="First" />
+					<Enumeration value="2" label="Last" />
+					<Enumeration value="3" label="Standalone" />
+				</EnumerationList>
+			</EnumeratedArgumentType>
+
+			<!-- ===== PUS-C TC secondary-header octet types: serviceType /
+			     messageSubtype are each a single uint8 octet. ===== -->
+			<IntegerArgumentType name="PUS_Octet_Type" signed="false">
+				<UnitSet />
+				<IntegerDataEncoding sizeInBits="8" encoding="unsigned" />
+			</IntegerArgumentType>
+
+			<!-- ===== SET_MODE argument: mode enum (0=SAFE/1=NOMINAL/2=PAYLOAD).
+			     uint8; ValidRange 0..2 so an out-of-range value is REJECTED at
+			     ground-side validation before the TC is ever sent — mirrors the
+			     simulator's TcRejectReason.ARG_OUT_OF_RANGE (tc.py _validate_set_mode,
+			     mode in 0..2). intendedRange so the bound is applied to the
+			     engineering (enum) value. SIMULATED. ===== -->
+			<EnumeratedArgumentType name="Spacecraft_Mode_Arg_Type">
+				<UnitSet />
+				<IntegerDataEncoding sizeInBits="8" encoding="unsigned" />
+				<EnumerationList>
+					<Enumeration value="0" label="SAFE" />
+					<Enumeration value="1" label="NOMINAL" />
+					<Enumeration value="2" label="PAYLOAD" />
+				</EnumerationList>
+				<ValidRangeSet validRangeAppliesToCalibrated="false">
+					<ValidRange minInclusive="0" maxInclusive="2" />
+				</ValidRangeSet>
+			</EnumeratedArgumentType>
+		</ArgumentTypeSet>
+
+		<MetaCommandSet>
+			<!-- ===== Abstract CCSDS TC primary header (6 octets). =====
+			     Lays out word0 (version/type/secHdrFlag/APID), word1 (groupFlags +
+			     fixed seqCount placeholder) and word2 (fixed length placeholder).
+			     The seqCount (14b) and packetDataLength (16b) are FixedValueEntry 0
+			     here; MyCommandPostprocessor overwrites both after the command is
+			     built. -->
+			<MetaCommand name="CCSDS_TC_Packet" abstract="true"
+				shortDescription="SIMULATED abstract CCSDS TC primary header (APID args).">
+				<ArgumentList>
+					<Argument argumentTypeRef="CCSDS_Version_Type" name="CCSDS_Version" />
+					<Argument argumentTypeRef="CCSDS_Type_Type" name="CCSDS_Type" />
+					<Argument argumentTypeRef="CCSDS_Sec_Hdr_Flag_Type" name="CCSDS_Sec_Hdr_Flag" />
+					<Argument argumentTypeRef="CCSDS_APID_Type" name="CCSDS_APID" />
+					<Argument argumentTypeRef="CCSDS_Group_Flags_Type" name="CCSDS_Group_Flags" />
+				</ArgumentList>
+				<CommandContainer name="CCSDS_TC_Packet">
+					<EntryList>
+						<ArgumentRefEntry argumentRef="CCSDS_Version" />
+						<ArgumentRefEntry argumentRef="CCSDS_Type" />
+						<ArgumentRefEntry argumentRef="CCSDS_Sec_Hdr_Flag" />
+						<ArgumentRefEntry argumentRef="CCSDS_APID" />
+						<ArgumentRefEntry argumentRef="CCSDS_Group_Flags" />
+						<!-- CCSDS sequence count — set by MyCommandPostprocessor (CcsdsSeqCountFiller). -->
+						<FixedValueEntry name="CCSDS_Source_Sequence_Count" binaryValue="0000" sizeInBits="14" />
+						<!-- CCSDS packet data length — set by MyCommandPostprocessor (binary.length-7 @ offset 4). -->
+						<FixedValueEntry name="CCSDS_Packet_Length" binaryValue="0000" sizeInBits="16" />
+					</EntryList>
+				</CommandContainer>
+			</MetaCommand>
+
+			<!-- ===== Abstract PUS-C TC packet (private service 132). =====
+			     Fixes the CCSDS primary header to a TC (type=TC, secHdrFlag=Present,
+			     APID=200, groupFlags=Standalone) and lays out the 5-octet PUS-C TC
+			     secondary header:
+			       octet0 = 0x29 (pusVersion 2 | ackFlags 0b1001 accept+complete) FixedValue
+			       octet1 = serviceType  (argument, assigned 132 by each command)
+			       octet2 = messageSubtype (argument, assigned per command)
+			       octet3-4 = sourceId (u16) = 0 (ground) FixedValue
+			     serviceType/subtype are arguments so each concrete command pins them
+			     via ArgumentAssignment (keeps them out of the operator-facing form). -->
+			<MetaCommand name="Pus_TC_Packet" abstract="true"
+				shortDescription="SIMULATED abstract PUS-C TC (service 132, ackFlags accept+complete).">
+				<BaseMetaCommand metaCommandRef="CCSDS_TC_Packet">
+					<ArgumentAssignmentList>
+						<ArgumentAssignment argumentName="CCSDS_Version" argumentValue="0" />
+						<ArgumentAssignment argumentName="CCSDS_Type" argumentValue="TC" />
+						<ArgumentAssignment argumentName="CCSDS_Sec_Hdr_Flag" argumentValue="Present" />
+						<ArgumentAssignment argumentName="CCSDS_APID" argumentValue="200" />
+						<ArgumentAssignment argumentName="CCSDS_Group_Flags" argumentValue="Standalone" />
+					</ArgumentAssignmentList>
+				</BaseMetaCommand>
+				<ArgumentList>
+					<Argument argumentTypeRef="PUS_Octet_Type" name="PUS_Service" />
+					<Argument argumentTypeRef="PUS_Octet_Type" name="PUS_Subtype" />
+				</ArgumentList>
+				<CommandContainer name="Pus_TC_Packet">
+					<EntryList>
+						<!-- PUS-C TC secondary octet0 = 0x29 (pusVersion 2 | ackFlags 0b1001). -->
+						<FixedValueEntry name="PUS_TC_Octet0" binaryValue="29" sizeInBits="8" />
+						<!-- octet1 serviceType (8b) — assigned 132 by each concrete command. -->
+						<ArgumentRefEntry argumentRef="PUS_Service" />
+						<!-- octet2 messageSubtype (8b) — assigned per command. -->
+						<ArgumentRefEntry argumentRef="PUS_Subtype" />
+						<!-- octet3-4 sourceId (u16) = 0 (ground). -->
+						<FixedValueEntry name="PUS_TC_SourceId" binaryValue="0000" sizeInBits="16" />
+					</EntryList>
+					<BaseContainer containerRef="CCSDS_TC_Packet" />
+				</CommandContainer>
+			</MetaCommand>
+
+			<!-- ===== SET_MODE (TC[132,1]) — set spacecraft mode. =====
+			     serviceType=132, subtype=1; one arg `mode` (enum 0..2, range-checked).
+			     A valid SET_MODE drives the simulator's spacecraft_mode; subsequent HK
+			     reports the commanded mode and a mode change emits PUS-5 events. -->
+			<MetaCommand name="SET_MODE"
+				shortDescription="SIMULATED TC[132,1] — set spacecraft mode (SAFE/NOMINAL/PAYLOAD).">
+				<LongDescription>SIMULATED telecommand. Sets the (simulated) spacecraft mode.
+					PUS private service 132, subtype 1. The `mode` argument is range-checked
+					0..2 so an out-of-range value is rejected at ground validation. On a valid
+					command the simulator applies the mode and returns PUS-1 acceptance then
+					completion ACKs; HK then reports the new spacecraft_mode.</LongDescription>
+				<BaseMetaCommand metaCommandRef="Pus_TC_Packet">
+					<ArgumentAssignmentList>
+						<ArgumentAssignment argumentName="PUS_Service" argumentValue="132" />
+						<ArgumentAssignment argumentName="PUS_Subtype" argumentValue="1" />
+					</ArgumentAssignmentList>
+				</BaseMetaCommand>
+				<ArgumentList>
+					<Argument argumentTypeRef="Spacecraft_Mode_Arg_Type" name="mode"
+						shortDescription="Target spacecraft mode (0=SAFE/1=NOMINAL/2=PAYLOAD). SIMULATED." />
+				</ArgumentList>
+				<CommandContainer name="SET_MODE">
+					<EntryList>
+						<ArgumentRefEntry argumentRef="mode" />
+					</EntryList>
+					<BaseContainer containerRef="Pus_TC_Packet" />
+				</CommandContainer>
+				<VerifierSet>
+					<!-- Acceptance: fires when a PUS TM[1,1] acceptance-success ACK
+					     (Pus1AcceptanceSuccess container) is received. -->
+					<AcceptedVerifier>
+						<ContainerRef containerRef="Pus1AcceptanceSuccess" />
+						<CheckWindow timeToStartChecking="PT0S" timeToStopChecking="PT5S"
+							checkWindowIsRelativeTo="commandRelease" />
+					</AcceptedVerifier>
+					<!-- Completion: fires when a PUS TM[1,7] completion-success ACK
+					     (Pus1CompletionSuccess container) is received. -->
+					<CompleteVerifier>
+						<ContainerRef containerRef="Pus1CompletionSuccess" />
+						<CheckWindow timeToStartChecking="PT0S" timeToStopChecking="PT5S"
+							checkWindowIsRelativeTo="commandRelease" />
+					</CompleteVerifier>
+				</VerifierSet>
+			</MetaCommand>
+
+			<!-- ===== PING (TC[132,2]) — no-op liveness check. =====
+			     serviceType=132, subtype=2; no args. Always valid; the simulator
+			     applies nothing and returns acceptance then completion ACKs. -->
+			<MetaCommand name="PING"
+				shortDescription="SIMULATED TC[132,2] — liveness ping (no args).">
+				<LongDescription>SIMULATED telecommand. PUS private service 132, subtype 2.
+					No arguments; always valid. The simulator applies nothing (no-op) and
+					returns PUS-1 acceptance then completion ACKs.</LongDescription>
+				<BaseMetaCommand metaCommandRef="Pus_TC_Packet">
+					<ArgumentAssignmentList>
+						<ArgumentAssignment argumentName="PUS_Service" argumentValue="132" />
+						<ArgumentAssignment argumentName="PUS_Subtype" argumentValue="2" />
+					</ArgumentAssignmentList>
+				</BaseMetaCommand>
+				<CommandContainer name="PING">
+					<EntryList />
+					<BaseContainer containerRef="Pus_TC_Packet" />
+				</CommandContainer>
+				<VerifierSet>
+					<AcceptedVerifier>
+						<ContainerRef containerRef="Pus1AcceptanceSuccess" />
+						<CheckWindow timeToStartChecking="PT0S" timeToStopChecking="PT5S"
+							checkWindowIsRelativeTo="commandRelease" />
+					</AcceptedVerifier>
+					<CompleteVerifier>
+						<ContainerRef containerRef="Pus1CompletionSuccess" />
+						<CheckWindow timeToStartChecking="PT0S" timeToStopChecking="PT5S"
+							checkWindowIsRelativeTo="commandRelease" />
+					</CompleteVerifier>
+				</VerifierSet>
+			</MetaCommand>
+		</MetaCommandSet>
+	</CommandMetaData>
 </SpaceSystem>

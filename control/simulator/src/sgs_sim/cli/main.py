@@ -28,8 +28,19 @@ def _build_parser() -> argparse.ArgumentParser:
         default=None,
         help="path to a TOML config file (default: shipped config/default.toml)",
     )
-    parser.add_argument("--host", default=None, help="UDP target host (overrides config)")
-    parser.add_argument("--port", type=int, default=None, help="UDP target port (overrides config)")
+    parser.add_argument("--host", default=None, help="UDP TM target host (overrides config)")
+    parser.add_argument(
+        "--port", type=int, default=None, help="UDP TM target port (overrides config)"
+    )
+    parser.add_argument("--tc-host", default=None, help="TC receiver bind host (overrides config)")
+    parser.add_argument(
+        "--tc-port", type=int, default=None, help="TC receiver bind port (overrides config)"
+    )
+    parser.add_argument(
+        "--no-tc",
+        action="store_true",
+        help="disable the telecommand receiver (run TM-only)",
+    )
     parser.add_argument(
         "--rate", type=float, default=None, help="emit rate in Hz (overrides config)"
     )
@@ -64,21 +75,28 @@ def main(argv: list[str] | None = None) -> int:
         return 2
 
     config = config.with_overrides(
-        host=args.host, port=args.port, rate_hz=args.rate, seed=args.seed
+        host=args.host,
+        port=args.port,
+        tc_host=args.tc_host,
+        tc_port=args.tc_port,
+        rate_hz=args.rate,
+        seed=args.seed,
     )
 
+    enable_tc = not args.no_tc
     logger.warning(
         "SIMULATED telemetry -> %s:%d (CCSDS/PUS, NOT operational) | rate=%.3g Hz seed=%d "
-        "duration=%s",
+        "duration=%s | TC receiver %s",
         config.host,
         config.port,
         config.rate_hz,
         config.seed,
         "forever" if args.duration <= 0 else f"{args.duration:g}s",
+        f"on {config.tc_host}:{config.tc_port}" if enable_tc else "off",
     )
 
     try:
-        hk_count = run_loop(config, duration=args.duration)
+        hk_count = run_loop(config, duration=args.duration, enable_tc=enable_tc)
     except KeyboardInterrupt:
         logger.info("interrupted; stopping SIMULATED telemetry")
         return 0

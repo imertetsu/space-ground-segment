@@ -44,6 +44,7 @@ def test_cli_short_run_emits_valid_hk_packets() -> None:
                 "50",
                 "--duration",
                 "0.2",
+                "--no-tc",
             ]
         )
         assert rc == 0
@@ -82,6 +83,7 @@ def test_cli_sequence_counts_advance() -> None:
                 "50",
                 "--duration",
                 "0.2",
+                "--no-tc",
             ]
         )
         packets = _drain(receiver)

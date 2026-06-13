@@ -45,6 +45,13 @@ APID_HK = 100
 APID_EVENT = 101
 """APID for event report (PUS service 5) packets (0x065)."""
 
+# APIDs frozen in Phase 3 (telecommanding).
+APID_TC = 200
+"""APID for telecommand (TC) packets sent ground->spacecraft (0x0C8)."""
+
+APID_VERIFICATION = 102
+"""APID for PUS service-1 command-verification ACK packets (TM, 0x066)."""
+
 # Field widths / wrap values.
 APID_MASK = 0x7FF
 """11-bit APID mask."""
