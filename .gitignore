@@ -1,0 +1,34 @@
+# --- OS / editor cruft ---
+.DS_Store
+Thumbs.db
+desktop.ini
+*.swp
+*~
+.idea/
+.vscode/*
+!.vscode/extensions.json
+!.vscode/settings.json
+
+# --- Secrets / local env (never commit) ---
+.env
+.env.*
+!.env.example
+*.local
+secrets/
+*.pem
+*.key
+
+# --- Logs / temp ---
+*.log
+logs/
+tmp/
+.cache/
+
+# --- Build / dependency output (stack-specific entries added when stack is chosen) ---
+dist/
+build/
+out/
+coverage/
+
+# NOTE: language/framework-specific ignores (node_modules/, __pycache__/,
+# target/, venv/, etc.) will be appended once the stack is pinned.
