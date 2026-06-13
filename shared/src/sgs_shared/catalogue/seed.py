@@ -14,7 +14,7 @@ from __future__ import annotations
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
-from sgs_shared.catalogue.models import CatalogueEntry
+from sgs_shared.catalogue.models import CatalogueEntry, Provenance
 
 if TYPE_CHECKING:
     from sgs_shared.catalogue.repository import Catalogue
@@ -40,8 +40,12 @@ def seed_demo(catalogue: Catalogue) -> tuple[CatalogueEntry, CatalogueEntry]:
         status="VALIDATED",
         sensing_time=datetime(2026, 6, 13, 9, 30, 0, tzinfo=UTC),
         ingest_time=now,
-        source_version="pdgs-sst-1.0",
         reference="SST_L2_DERIVED/demo-payload-SST-0001.nc",
+        provenance=Provenance(
+            source_version="pdgs-sst-1.0",
+            source_refs=("L1-demo-0001",),
+            run_time=datetime(2026, 6, 13, 9, 45, 0, tzinfo=UTC),
+        ),
         detail="Demo payload product (REAL-data shape; Phase-0 seed).",
     )
 
@@ -53,8 +57,12 @@ def seed_demo(catalogue: Catalogue) -> tuple[CatalogueEntry, CatalogueEntry]:
         status="OPEN",
         sensing_time=datetime(2026, 6, 13, 9, 31, 0, tzinfo=UTC),
         ingest_time=now,
-        source_version="yamcs-mdb-SGS",
-        reference="/SGS/obc_temp",
+        reference="yamcs://myproject/alarms/SGS/obc_temp/1",
+        provenance=Provenance(
+            source_version="yamcs-mdb-SGS",
+            source_refs=("/SGS/obc_temp",),
+            run_time=datetime(2026, 6, 13, 9, 31, 0, tzinfo=UTC),
+        ),
         detail="Demo control reference (SIMULATED telemetry; Yamcs locator).",
     )
 

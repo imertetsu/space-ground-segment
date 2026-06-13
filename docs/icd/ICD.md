@@ -255,19 +255,67 @@ out-of-range `mode` is rejected at validation (HTTP 400, not transmitted).
 > `anomaly` + the `sgs-ops` operator surface. Depends on **neither** segment
 > (import-linter forbidden contract on `pdgs`/`sgs_sim`). Contracts frozen per phase.
 
-### 3.1 Shared catalogue (PostgreSQL) — Phase 0 boundary
+### 3.1 Shared catalogue (PostgreSQL) — FROZEN schema (Phase 1)
 
 - DB: **PostgreSQL** (`postgres` compose service, `epic3` profile; db `sgs_catalogue`).
 - `PostgresCatalogue(dsn=None)` (DSN arg or `PDGS_PG_DSN` env) implements the shared
-  `Catalogue` ABC (`register` / `get` / `list(*, origin=None)`); idempotent schema
-  (`catalogue_entries`, UTC `timestamptz`).
-- Unified `CatalogueEntry`: `entry_id`, **`origin`** (payload|control),
-  **`simulated`**, `product_type`, `status`, `sensing_time`/`ingest_time` (UTC),
-  `source_version`, `reference` (locator), `detail`. Every row carries origin +
-  simulated — unification never erases the real-vs-simulated distinction.
-- Operator surface: `sgs-ops` CLI behind the dark flag **`SGS_SHARED`** (ships dark).
-- The catalogue **schema is frozen in Phase 1**; this is the Phase-0 boundary only.
+  `Catalogue` ABC. **Full surface (frozen):** `register` / `get` /
+  `list(*, origin=None)` / `update_status(entry_id, status)` /
+  `set_provenance(entry_id, provenance)`. Schema init is idempotent **and
+  forward-compatible** (`CREATE TABLE IF NOT EXISTS` + `ALTER … ADD COLUMN IF NOT
+  EXISTS` for the `prov_*` columns). A new connection per call; all backend errors
+  wrap in `CatalogueError`.
+- **Unified record `CatalogueEntry` (frozen):** `entry_id`, **`origin`**
+  (`payload`|`control`), **`simulated`** (bool), `product_type`, `status`,
+  `sensing_time` (UTC|None), `ingest_time` (UTC), `reference` (locator),
+  `provenance` (envelope), `detail`. `origin` + `simulated` are mandatory on every
+  row — unification never erases the real-vs-simulated distinction (SRD §5).
+- **Provenance envelope (frozen, one shape both segments):** `source_version`
+  (processor version for payload / MDB id for control), `source_refs`
+  (tuple — payload input product ids / control source parameter ref(s)),
+  `run_time` (UTC|None — payload run / control alarm-trigger time).
 
-**Verified live (2026-06-13):** `sgs-ops status` lists one payload product +
-one control reference together from the shared Postgres catalogue, each labelled
-(control = `control-simulated`); postgres-marked tests pass.
+**Frozen `catalogue_entries` table:**
+
+| column | type | null | meaning |
+|---|---|---|---|
+| `entry_id` | TEXT PK | no | row id (payload product id / control locator) |
+| `origin` | TEXT (CHECK in `payload`,`control`) | no | source segment |
+| `simulated` | BOOLEAN | no | `false`=payload (REAL), `true`=control (SIMULATED) |
+| `product_type` | TEXT | no | e.g. `SST_L2_DERIVED`, `TM_ARCHIVE_REF`, `OOL_ALARM_REF` |
+| `status` | TEXT | no | lifecycle/state (e.g. `VALIDATED`, `ARCHIVED`, `TRIGGERED`) |
+| `sensing_time` | TIMESTAMPTZ | yes | observation/trigger time (UTC) |
+| `ingest_time` | TIMESTAMPTZ | no | when written to the shared catalogue (UTC) |
+| `reference` | TEXT | no | locator (payload path/id or `yamcs://…`) — never a value copy |
+| `prov_source_version` | TEXT | yes | provenance: processor/MDB version |
+| `prov_source_refs` | TEXT[] | no (`'{}'`) | provenance: upstream ids/param refs |
+| `prov_run_time` | TIMESTAMPTZ | yes | provenance: run/trigger time (UTC) |
+| `detail` | TEXT | yes | free-text note |
+
+- **Catalogue migration policy:** NEW payload writes can target Postgres via the
+  shared mappers (`catalogue.mappers.entry_from_payload_product`) without rewriting
+  the Epic-1 SQLite history; SQLite stays the offline payload-dev catalogue.
+
+### 3.2 Control reference bridge (read-only Yamcs REST)
+
+- **`control_bridge.YamcsControlBridge`** records control telemetry/anomaly
+  **references** (never value copies — AC1.3) into the shared catalogue, read-only
+  over the Yamcs REST API (stdlib `urllib`; **no `control/` code dependency** —
+  same read-only consumer pattern `viz/` will use in Epic 4). Endpoints (instance
+  `myproject`):
+  - `GET /api/mdb/myproject/parameters?system=/SGS` → one `TM_ARCHIVE_REF` per
+    parameter; `reference = yamcs://myproject/parameters/<qualifiedName>`.
+  - `GET /api/archive/myproject/alarms` → one `OOL_ALARM_REF` per alarm;
+    `reference = yamcs://myproject/alarms/<param>/<seqNum>`, `status ∈
+    {TRIGGERED, ACKNOWLEDGED}`, `sensing_time`/`prov_run_time` = alarm `triggerTime`.
+  - Yamcs alarm `id` may be split (`namespace`+`name`) or a single fully-qualified
+    `name` (real archive alarms) — both normalise to the qualified parameter ref.
+- Operator surface: `sgs-ops` CLI behind the dark flag **`SGS_SHARED`** (ships
+  dark): `status` (cross-segment listing), `bridge` (poll Yamcs → record refs),
+  `seed-demo` (hidden).
+
+**Verified live (2026-06-13):** with Yamcs running, `sgs-ops bridge` recorded 15
+control references (14 TM-archive + 1 OOL alarm) from real Yamcs REST, then
+`sgs-ops status` listed them together with a payload product (1 payload + 16
+control), each labelled (`payload` / `control-simulated`); no telemetry value
+stored. 33 shared tests pass (DB + bridge), `lint-imports` keeps `shared ↛ pdgs/sgs_sim`.

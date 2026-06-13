@@ -8,11 +8,14 @@ implementation using **psycopg 3** (``psycopg.connect``).
 This mirrors the *shape* of the payload ``Catalogue`` ABC (``pdgs.catalogue.repository``)
 for a clean Phase-1 alignment, but is fully independent — it does not import ``pdgs``.
 
-Timestamps are stored as ``timestamptz`` (UTC). The schema is created idempotently
-on construction. A new connection is opened per call (simple, avoids cross-thread
-state); fine for Phase 0. Phase 0 implements the minimal contract
-(``register`` / ``get`` / ``list``); ``update_status`` / ``set_provenance`` land in
-Phase 1 with the frozen schema.
+Timestamps are stored as ``timestamptz`` (UTC). The provenance envelope is stored
+flattened into three ``prov_*`` columns (``prov_source_version``,
+``prov_source_refs`` as a native ``text[]``, ``prov_run_time``) and rebuilt into a
+nested :class:`~sgs_shared.catalogue.models.Provenance` on read. The schema is
+created idempotently AND forward-compatibly on construction (so an existing Phase-0
+flat table upgrades cleanly). A new connection is opened per call (simple, avoids
+cross-thread state). The full query surface is ``register`` / ``get`` / ``list`` /
+``update_status`` / ``set_provenance``.
 """
 
 from __future__ import annotations
@@ -24,7 +27,7 @@ from typing import TYPE_CHECKING
 
 import psycopg
 
-from sgs_shared.catalogue.models import CatalogueEntry, Origin
+from sgs_shared.catalogue.models import CatalogueEntry, Origin, Provenance
 
 if TYPE_CHECKING:
     from collections.abc import Iterable
@@ -33,19 +36,28 @@ if TYPE_CHECKING:
 # (``PDGS_PG_DSN``) so a single DSN configures both Phase-0 callers.
 PG_DSN_ENV = "PDGS_PG_DSN"
 
+# Full frozen schema. ``CREATE TABLE IF NOT EXISTS`` lays the table down with every
+# Phase-1 column; the defensive ``ALTER TABLE ... ADD COLUMN IF NOT EXISTS`` lines
+# upgrade an existing Phase-0 flat table (which lacked the provenance columns).
 _SCHEMA = """
 CREATE TABLE IF NOT EXISTS catalogue_entries (
-    entry_id        TEXT PRIMARY KEY,
-    origin          TEXT NOT NULL CHECK (origin IN ('payload', 'control')),
-    simulated       BOOLEAN NOT NULL,
-    product_type    TEXT NOT NULL,
-    status          TEXT NOT NULL,
-    sensing_time    TIMESTAMPTZ,
-    ingest_time     TIMESTAMPTZ NOT NULL,
-    source_version  TEXT,
-    reference       TEXT NOT NULL,
-    detail          TEXT
+    entry_id            TEXT PRIMARY KEY,
+    origin              TEXT NOT NULL CHECK (origin IN ('payload', 'control')),
+    simulated           BOOLEAN NOT NULL,
+    product_type        TEXT NOT NULL,
+    status              TEXT NOT NULL,
+    sensing_time        TIMESTAMPTZ,
+    ingest_time         TIMESTAMPTZ NOT NULL,
+    reference           TEXT NOT NULL,
+    prov_source_version TEXT,
+    prov_source_refs    TEXT[] NOT NULL DEFAULT '{}',
+    prov_run_time       TIMESTAMPTZ,
+    detail              TEXT
 );
+ALTER TABLE catalogue_entries ADD COLUMN IF NOT EXISTS prov_source_version TEXT;
+ALTER TABLE catalogue_entries
+    ADD COLUMN IF NOT EXISTS prov_source_refs TEXT[] NOT NULL DEFAULT '{}';
+ALTER TABLE catalogue_entries ADD COLUMN IF NOT EXISTS prov_run_time TIMESTAMPTZ;
 """
 
 # Column order shared by INSERT / SELECT so row-mapping stays in lockstep.
@@ -57,19 +69,16 @@ _COLUMNS = (
     "status",
     "sensing_time",
     "ingest_time",
-    "source_version",
     "reference",
+    "prov_source_version",
+    "prov_source_refs",
+    "prov_run_time",
     "detail",
 )
 
 
 class CatalogueError(RuntimeError):
     """Raised when a catalogue operation cannot complete (e.g. a backend error)."""
-
-
-def _utcnow() -> datetime:
-    """Return the current time as a timezone-aware UTC datetime."""
-    return datetime.now(tz=UTC)
 
 
 def _as_utc(value: datetime) -> datetime:
@@ -97,6 +106,14 @@ class Catalogue(ABC):
     @abstractmethod
     def list(self, *, origin: Origin | None = None) -> list[CatalogueEntry]:
         """Return entries (optionally filtered by ``origin``), ordered by ingest time."""
+
+    @abstractmethod
+    def update_status(self, entry_id: str, status: str) -> None:
+        """Update an entry's ``status``; raise :class:`CatalogueError` if unknown."""
+
+    @abstractmethod
+    def set_provenance(self, entry_id: str, provenance: Provenance) -> None:
+        """Overwrite an entry's provenance envelope; raise on unknown ``entry_id``."""
 
 
 class PostgresCatalogue(Catalogue):
@@ -130,14 +147,16 @@ class PostgresCatalogue(Catalogue):
             raise CatalogueError(f"failed to connect to PostgreSQL: {exc}") from exc
 
     def register(self, entry: CatalogueEntry) -> None:
+        prov = entry.provenance
         try:
             with self._connect() as conn:
                 conn.execute(
                     """
                     INSERT INTO catalogue_entries (
                         entry_id, origin, simulated, product_type, status,
-                        sensing_time, ingest_time, source_version, reference, detail
-                    ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                        sensing_time, ingest_time, reference,
+                        prov_source_version, prov_source_refs, prov_run_time, detail
+                    ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                     ON CONFLICT (entry_id) DO UPDATE SET
                         origin = EXCLUDED.origin,
                         simulated = EXCLUDED.simulated,
@@ -145,8 +164,10 @@ class PostgresCatalogue(Catalogue):
                         status = EXCLUDED.status,
                         sensing_time = EXCLUDED.sensing_time,
                         ingest_time = EXCLUDED.ingest_time,
-                        source_version = EXCLUDED.source_version,
                         reference = EXCLUDED.reference,
+                        prov_source_version = EXCLUDED.prov_source_version,
+                        prov_source_refs = EXCLUDED.prov_source_refs,
+                        prov_run_time = EXCLUDED.prov_run_time,
                         detail = EXCLUDED.detail
                     """,
                     (
@@ -157,8 +178,10 @@ class PostgresCatalogue(Catalogue):
                         entry.status,
                         _as_utc(entry.sensing_time) if entry.sensing_time is not None else None,
                         _as_utc(entry.ingest_time),
-                        entry.source_version,
                         entry.reference,
+                        prov.source_version,
+                        list(prov.source_refs),
+                        _as_utc(prov.run_time) if prov.run_time is not None else None,
                         entry.detail,
                     ),
                 )
@@ -192,6 +215,45 @@ class PostgresCatalogue(Catalogue):
             raise CatalogueError(f"failed to list entries: {exc}") from exc
         return [_row_to_entry(row) for row in rows]
 
+    def update_status(self, entry_id: str, status: str) -> None:
+        try:
+            with self._connect() as conn:
+                cur = conn.execute(
+                    "UPDATE catalogue_entries SET status = %s WHERE entry_id = %s",
+                    (status, entry_id),
+                )
+                rowcount = cur.rowcount
+                conn.commit()
+        except psycopg.Error as exc:
+            raise CatalogueError(f"failed to update status of entry {entry_id!r}: {exc}") from exc
+        if rowcount == 0:
+            raise CatalogueError(f"unknown entry_id {entry_id!r}")
+
+    def set_provenance(self, entry_id: str, provenance: Provenance) -> None:
+        try:
+            with self._connect() as conn:
+                cur = conn.execute(
+                    """
+                    UPDATE catalogue_entries SET
+                        prov_source_version = %s,
+                        prov_source_refs = %s,
+                        prov_run_time = %s
+                    WHERE entry_id = %s
+                    """,
+                    (
+                        provenance.source_version,
+                        list(provenance.source_refs),
+                        _as_utc(provenance.run_time) if provenance.run_time is not None else None,
+                        entry_id,
+                    ),
+                )
+                rowcount = cur.rowcount
+                conn.commit()
+        except psycopg.Error as exc:
+            raise CatalogueError(f"failed to set provenance of entry {entry_id!r}: {exc}") from exc
+        if rowcount == 0:
+            raise CatalogueError(f"unknown entry_id {entry_id!r}")
+
 
 def _row_to_entry(row: tuple[object, ...]) -> CatalogueEntry:
     """Reconstruct a :class:`CatalogueEntry` from a positional ``_COLUMNS`` row."""
@@ -203,8 +265,10 @@ def _row_to_entry(row: tuple[object, ...]) -> CatalogueEntry:
         status,
         sensing_time,
         ingest_time,
-        source_version,
         reference,
+        prov_source_version,
+        prov_source_refs,
+        prov_run_time,
         detail,
     ) = row
     if origin not in ("payload", "control"):  # pragma: no cover - guarded by CHECK
@@ -212,6 +276,17 @@ def _row_to_entry(row: tuple[object, ...]) -> CatalogueEntry:
     sensing = _as_utc(sensing_time) if isinstance(sensing_time, datetime) else None
     if not isinstance(ingest_time, datetime):  # pragma: no cover - NOT NULL column
         raise CatalogueError(f"corrupt row {entry_id!r}: missing ingest_time")
+    run_time = _as_utc(prov_run_time) if isinstance(prov_run_time, datetime) else None
+    source_refs: tuple[str, ...] = (
+        tuple(str(ref) for ref in prov_source_refs)
+        if isinstance(prov_source_refs, (list, tuple))
+        else ()
+    )
+    provenance = Provenance(
+        source_version=str(prov_source_version) if prov_source_version is not None else None,
+        source_refs=source_refs,
+        run_time=run_time,
+    )
     return CatalogueEntry(
         entry_id=str(entry_id),
         origin=origin,
@@ -220,7 +295,7 @@ def _row_to_entry(row: tuple[object, ...]) -> CatalogueEntry:
         status=str(status),
         sensing_time=sensing,
         ingest_time=_as_utc(ingest_time),
-        source_version=str(source_version) if source_version is not None else None,
         reference=str(reference),
+        provenance=provenance,
         detail=str(detail) if detail is not None else None,
     )

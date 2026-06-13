@@ -7,7 +7,7 @@ from datetime import UTC, datetime
 
 import pytest
 
-from sgs_shared.catalogue.models import CatalogueEntry
+from sgs_shared.catalogue.models import CatalogueEntry, Provenance
 
 
 def _payload_entry() -> CatalogueEntry:
@@ -19,8 +19,12 @@ def _payload_entry() -> CatalogueEntry:
         status="VALIDATED",
         sensing_time=datetime(2026, 6, 13, 9, 30, tzinfo=UTC),
         ingest_time=datetime(2026, 6, 13, 10, 0, tzinfo=UTC),
-        source_version="pdgs-sst-1.0",
         reference="SST_L2_DERIVED/p-1.nc",
+        provenance=Provenance(
+            source_version="pdgs-sst-1.0",
+            source_refs=("L1-0001",),
+            run_time=datetime(2026, 6, 13, 9, 45, tzinfo=UTC),
+        ),
     )
 
 
@@ -33,8 +37,12 @@ def _control_entry() -> CatalogueEntry:
         status="OPEN",
         sensing_time=None,
         ingest_time=datetime(2026, 6, 13, 10, 1, tzinfo=UTC),
-        source_version="yamcs-mdb-SGS",
-        reference="/SGS/obc_temp",
+        reference="yamcs://myproject/alarms/SGS/obc_temp/1",
+        provenance=Provenance(
+            source_version="yamcs-mdb-SGS",
+            source_refs=("/SGS/obc_temp",),
+            run_time=datetime(2026, 6, 13, 10, 1, tzinfo=UTC),
+        ),
         detail="SIMULATED telemetry",
     )
 
@@ -44,6 +52,8 @@ def test_construction_payload() -> None:
     assert entry.origin == "payload"
     assert entry.simulated is False
     assert entry.detail is None  # default
+    assert entry.provenance.source_version == "pdgs-sst-1.0"
+    assert entry.provenance.source_refs == ("L1-0001",)
 
 
 def test_construction_control() -> None:

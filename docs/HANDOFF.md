@@ -4,7 +4,7 @@
 > every epic, never endlessly appended. Cap ~150 lines. Read this first when
 > re-entering after a gap. Full methodology + conventions: `CLAUDE.md`.
 
-_Last updated: 2026-06-13 — Epics 1 & 2 CLOSED on `main`; Epic 3 (shared) Phase 0 done on `epic/shared`._
+_Last updated: 2026-06-13 — Epics 1 & 2 CLOSED on `main`; Epic 3 (shared) Phases 0–1 done on `epic/shared` (catalogue schema FROZEN)._
 
 ## Stack snapshot
 
@@ -17,7 +17,8 @@ _Last updated: 2026-06-13 — Epics 1 & 2 CLOSED on `main`; Epic 3 (shared) Phas
 - **Gates — payload** (`payload/`): ruff · `mypy --strict` 0 · pytest (141) ·
   lint-imports · `docker compose build payload`. **simulator** (`control/simulator/`):
   ruff · `mypy --strict` 0 · pytest (~83). **yamcs** (`control/yamcs/`): `./mvnw
-  package` (XTCE validated by Yamcs at startup).
+  package` (XTCE validated by Yamcs at startup). **shared** (`shared/`): ruff ·
+  `mypy --strict` 0 · pytest (33, postgres-marked need `PDGS_PG_DSN`) · lint-imports.
 
 ## Active feature flags
 
@@ -25,21 +26,28 @@ _Last updated: 2026-06-13 — Epics 1 & 2 CLOSED on `main`; Epic 3 (shared) Phas
 
 ## In-flight work
 
-- **Epic 3 (shared layers) on branch `epic/shared`. Phase 0 DONE** (riskiest
-  assumption proven): `shared/` package (`sgs_shared`, own gates; import-linter
-  forbids importing `pdgs`/`sgs_sim`) + a shared **PostgreSQL** catalogue
-  (`PostgresCatalogue`, unified `CatalogueEntry` with origin+simulated) + the
-  `sgs-ops` operator CLI (dark flag `SGS_SHARED`). **Verified live:** `sgs-ops
-  status` lists one payload product + one control reference together from Postgres,
-  each labelled. ICD §3.1; spec `docs/specs/shared.md`. 3 ESCALATED decisions
-  adopted (CLI MVP; Postgres for new writes + keep SQLite offline; read-only
-  Yamcs-REST bridge).
-- **Next: Phase 1 (shared catalogue, REQ-INT-02)** — full `PostgresCatalogue`
-  (all `Catalogue` ABC methods + provenance), payload products + control telemetry
-  refs both recorded with unified provenance, single query surface, read-only
-  Yamcs-REST control bridge; **freeze the catalogue schema** (the load-bearing
-  freeze). Postgres runs via `docker compose --profile epic3 up -d postgres`;
-  `PDGS_PG_DSN=postgresql://sgs:change-me@localhost:5432/sgs_catalogue`.
+- **Epic 3 (shared layers) on branch `epic/shared`. Phases 0–1 DONE.** `shared/`
+  package (`sgs_shared`, own gates; import-linter forbids importing `pdgs`/`sgs_sim`)
+  + a shared **PostgreSQL** catalogue + the `sgs-ops` operator CLI (dark flag
+  `SGS_SHARED`).
+  - **Phase 1 (REQ-INT-02) — catalogue schema FROZEN** (the load-bearing freeze):
+    full `PostgresCatalogue` (`register`/`get`/`list`/`update_status`/`set_provenance`),
+    unified `CatalogueEntry` + `Provenance` envelope (origin+simulated+provenance on
+    every row), single cross-segment query surface, primitive-field `mappers.py`
+    (so segments map in without `shared/` importing them), and a **read-only
+    Yamcs-REST control bridge** (`control_bridge.YamcsControlBridge`) recording
+    telemetry/alarm **references** (never value copies). Frozen schema in **ICD §3.1**;
+    bridge in **ICD §3.2**. **Verified live against real Yamcs:** `sgs-ops bridge`
+    recorded 15 control refs (14 TM-archive + 1 OOL alarm) from Yamcs REST, then
+    `sgs-ops status` listed them with a payload product (1 payload + 16 control),
+    each labelled, no value stored. 33 shared tests pass. 3 ESCALATED defaults
+    adopted (CLI MVP; Postgres for new writes + keep SQLite offline; read-only bridge).
+- **Next: Phase 2 (shared anomaly model, REQ-INT-03)** — one anomaly record +
+  state machine covering payload `FAILED`/dead-letter and Yamcs OOL alarms, shared
+  operator actions (acknowledge both; reprocess payload-only); link via the frozen
+  catalogue `reference`. Then Phase 3 (time service), Phase 4 (operator surface +
+  flag flip + close → merge to `main`). Postgres: `docker compose --profile epic3 up
+  -d postgres`; `PDGS_PG_DSN=postgresql://sgs:change-me@localhost:5432/sgs_catalogue`.
 
 ## Epic 1 (payload) — outcome
 
@@ -100,8 +108,11 @@ _Last updated: 2026-06-13 — Epics 1 & 2 CLOSED on `main`; Epic 3 (shared) Phas
 
 ## Next step
 
-- **Epic 3 — Phase 1 (shared catalogue, REQ-INT-02):** complete `PostgresCatalogue`
-  (full `Catalogue` ABC + unified provenance); record payload products + control
-  telemetry refs with one query surface; add a read-only Yamcs-REST control bridge;
-  **freeze the shared catalogue schema** (record in ICD §3). Then Phases 2 (anomaly
-  model), 3 (time service), 4 (operator surface + close).
+- **Epic 3 — Phase 2 (shared anomaly model, REQ-INT-03):** one anomaly record +
+  state machine for payload `FAILED`/dead-letter **and** Yamcs OOL alarms; shared
+  operator actions (acknowledge both halves; reprocess payload-only); link via the
+  frozen catalogue `reference`. Then Phase 3 (time service, REQ-INT-01), Phase 4
+  (single operator surface + flag flip + close → merge `epic/shared` to `main`).
+- **Follow-up (non-blocking):** wire the live `pdgs` CLI to optionally write into
+  the shared Postgres catalogue (the mapper + capability exist and are tested;
+  default stays SQLite for offline dev).

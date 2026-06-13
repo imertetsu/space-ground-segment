@@ -38,3 +38,13 @@ def test_seed_demo_dark_flag_off_exits_zero(
     rc = main(["seed-demo"])
     assert rc == 0
     assert DARK_MESSAGE in capsys.readouterr().out
+
+
+def test_bridge_dark_flag_off_exits_zero(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    # The bridge command is dark-flagged too — no DB and no HTTP touched when off.
+    monkeypatch.delenv(DARK_FLAG_ENV, raising=False)
+    rc = main(["bridge"])
+    assert rc == 0
+    assert DARK_MESSAGE in capsys.readouterr().out
