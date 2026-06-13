@@ -1,10 +1,11 @@
-# Software Requirements Document (SRD) — Epic 1 (PDGS / Payload)
+# Software Requirements Document (SRD)
 
-> ECSS-flavoured SRD for the `payload/` bounded context. Persistent document.
-> Requirement identifiers are stable; the ephemeral Epic 1 spec
-> (`docs/specs/payload.md`) holds the in-flight plan and is deleted on epic close.
+> ECSS-flavoured SRD covering the `payload/` (PDGS, Epic 1) and `control/` (FOS,
+> Epic 2) bounded contexts. Persistent document. Requirement identifiers are
+> stable; the ephemeral per-epic specs (`docs/specs/<epic>.md`) hold the in-flight
+> plans and are deleted on epic close.
 
-_Scope: Epic 1 only (PDGS payload chain). Control (FOS) requirements are Epic 2._
+_Scope: Epic 1 (PDGS payload chain, §1) and Epic 2 (FOS control, §1A)._
 
 ---
 
@@ -56,6 +57,38 @@ Each requirement is a single testable statement. Traceability to tests lives in
 | REQ-OPS-01 | A product whose processing fails shall transition to a dead-letter state. |
 | REQ-OPS-02 | The system shall support on-demand reprocessing of a selected product. |
 | REQ-OPS-03 | An operator shall be able to query product/pipeline status via a CLI. |
+
+## 1A. Epic 2 — Control (FOS) requirements
+
+> FOS = Flight Operations Segment: a spacecraft **simulator** emitting CCSDS / PUS
+> telemetry over UDP into **Yamcs**, which decommutates it against an **XTCE** MDB,
+> limit-checks spacecraft health, and supports telecommanding. Lives in
+> `control/`. The in-flight plan is `docs/specs/control.md` (ephemeral). Interface
+> details are in `docs/icd/ICD.md §2`.
+
+> **Control telemetry is SIMULATED but CCSDS / PUS-compliant and labelled
+> simulated everywhere** (data, web UI, logs, reports, docs) — see §5. Exact CCSDS
+> field widths, PUS subtypes, and APIDs are **not fixed here**; they are finalized
+> against CCSDS 133.0-B-2 / ECSS-E-ST-70-41 in the MDB phase (ICD §2).
+
+### Simulator — REQ-SIM
+
+| ID | Requirement |
+|---|---|
+| REQ-SIM-01 | The simulator shall emit a periodic stream of CCSDS Space Packets carrying PUS housekeeping (service 3) TM — a small set of realistic parameters (e.g. battery voltage, temperatures, mode, reaction-wheel speed) as raw counts. |
+| REQ-SIM-02 | The simulator shall emit PUS event reports (service 5) on state changes / threshold crossings. |
+| REQ-SIM-03 | The simulator shall accept telecommands and return PUS command verification (service 1) acknowledgements. |
+| REQ-SIM-04 | The simulator shall produce realistic dynamics (drift, occasional injected anomalies); anomaly injection shall be configurable. |
+
+### Telemetry, MDB & Command — REQ-TMC
+
+| ID | Requirement |
+|---|---|
+| REQ-TMC-01 | The XTCE MDB shall define parameters (position, type, raw→engineering calibration curves), limits, and the telecommand set. |
+| REQ-TMC-02 | Yamcs shall ingest the simulator stream via a UDP/TCP data link and decommutate packets into calibrated engineering-unit parameters per the MDB. |
+| REQ-TMC-03 | The system shall perform limit checking — parameters out of soft/hard limits raise out-of-limit (OOL) alarms. |
+| REQ-TMC-04 | The system shall support telecommanding — build/validate a TC against the MDB, send it, and track the verification chain. |
+| REQ-TMC-05 | Spacecraft health state and OOL alarms shall be queryable and surfaced to the operator (the Yamcs web UI is acceptable). |
 
 ## 2. Rationale
 

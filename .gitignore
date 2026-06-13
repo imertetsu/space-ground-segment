@@ -52,6 +52,9 @@ node_modules/
 target/
 *.class
 .gradle/
+# Recorded CCSDS packet dumps (quickstart demo data, ~10MB) — Phase 1's simulator
+# generates packets live; keep local, don't version.
+*.ccsds
 
 # --- Data / products (never commit downloaded EO data; only tiny labelled fixtures) ---
 data/

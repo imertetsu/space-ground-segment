@@ -1,9 +1,11 @@
 # Interface Control Document (ICD)
 
-> ECSS-flavoured ICD. The **Payload** section is real (verified facts). The
-> **Control** section (Epic 2) is a marked **TBD** placeholder — no packet
-> structures or PUS specifics are invented here; they are to be confirmed against
-> the official CCSDS / ECSS-PUS / Yamcs documentation.
+> ECSS-flavoured ICD. The **Payload** section (§1) is real (verified facts). The
+> **Control** section (§2, Epic 2) gives the confirmed transport / framing
+> interface from the standards and Yamcs. **No packet byte-layouts, PUS subtypes,
+> or APIDs are invented here** — exact field widths and subtypes are marked
+> *to be finalized in the MDB phase against the standard* (CCSDS 133.0-B-2,
+> ECSS-E-ST-70-41) and recorded here as each Epic 2 phase freezes its contract.
 
 ---
 
@@ -92,40 +94,79 @@ gridding via **nearest-neighbour** co-location. This is a documented
 
 ---
 
-## 2. Control interface (FOS — Epic 2) — **TBD / TO BE CONFIRMED**
+## 2. Control interface (FOS — Epic 2)
 
-> **PLACEHOLDER.** None of the following is defined yet. **Do not invent** packet
-> structures, field layouts, APIDs, or PUS service specifics. Each item below is
-> **to be confirmed against the official CCSDS, ECSS-E-ST-70-41 (PUS), and Yamcs
-> documentation** during Epic 2.
+> The transport / framing interface below is confirmed from the standards and the
+> Yamcs quickstart. **Exact bit/byte field-maps, PUS subtypes, and APIDs are NOT
+> invented here.** They are finalized against the standards as each Epic 2 phase
+> freezes its contract (per `docs/specs/control.md`): Phase 1 freezes the packet /
+> APID layout + HK data-field field-map; Phase 2 freezes the XTCE parameter /
+> calibration / limit set; Phase 3 freezes the command set + verification stages.
+> This section is filled in as those contracts land.
 
-### 2.1 CCSDS Space Packet structure — **TBD**
+The FOS is a spacecraft **simulator** (Python, `control/simulator/`) emitting
+CCSDS Space Packets with a PUS secondary header over **UDP** into **Yamcs**
+(Java, `control/yamcs/`), which decommutates them against an **XTCE** MDB.
 
-- Primary header, secondary header, and data field layout: **TBD** (confirm
-  against CCSDS 133.0-B Space Packet Protocol).
+### 2.1 CCSDS Space Packet — primary header (CCSDS 133.0-B-2)
 
-### 2.2 PUS services (counts confirmed; specifics TBD)
+The **6-octet (48-bit) primary header** is fixed by the standard. An optional
+secondary header (here, the PUS secondary header — §2.2) follows, then the packet
+data field.
 
-The intended PUS services for the telemetry/telecommand simulation:
-
-| PUS service | Purpose | Status |
+| Field | Width | Notes |
 |---|---|---|
-| Service 3 | Housekeeping (HK) | **TBD** — parameters / structure to be confirmed against ECSS-E-ST-70-41 |
-| Service 5 | Event reporting | **TBD** — event definitions to be confirmed |
-| Service 1 | Command (request) verification | **TBD** — acceptance/execution stages to be confirmed |
-| Service 9 | Time management | **TBD** — time format / correlation to be confirmed |
+| Packet Version Number | 3 bits | CCSDS Space Packet = `000`. |
+| Packet Type | 1 bit | `0` = TM (telemetry), `1` = TC (telecommand). |
+| Secondary Header Flag | 1 bit | `1` when a secondary header is present (PUS packets set this). |
+| Application Process Identifier (APID) | 11 bits | Logical stream id. **Exact APID values to be finalized in the MDB phase — not invented here.** |
+| Sequence Flags | 2 bits | Grouping (`11` = unsegmented standalone packet). |
+| Packet Sequence Count | 14 bits | Per-APID counter (wraps); Yamcs preprocessor uses it. |
+| Packet Data Length | 16 bits | **= (number of octets in the packet data field) − 1.** |
 
-> Service numbers above are the conventional PUS service identifiers. All field
-> definitions, subtypes, and parameter sets remain **TBD**.
+> The first 4 octets are the *packet identification* + *packet sequence control*;
+> the last 2 octets are the *packet data length*. The packet data field (secondary
+> header + user data) follows the 6-octet primary header.
 
-### 2.3 XTCE MIB summary — **TBD**
+### 2.2 PUS secondary header & services (ECSS-E-ST-70-41)
 
-- Mission Information Base (parameters, telecommands, calibrators, alarms)
-  expressed in XTCE for Yamcs: **TBD** — to be defined and confirmed against the
-  Yamcs / XTCE documentation in Epic 2.
+PUS TM/TC packets carry a **PUS secondary header** in the packet data field,
+containing (among standard fields) a **service type** and a **message subtype**
+that identify the service and the specific message. Services used by this FOS:
+
+| PUS service | Use in this FOS | Direction | Subtypes / field widths |
+|---|---|---|---|
+| Service 3 — Housekeeping | Periodic HK parameter reports (REQ-SIM-01) | TM | **to be finalized in the MDB phase against ECSS-E-ST-70-41 — not invented here** |
+| Service 5 — Event reporting | Event reports on state changes / threshold crossings (REQ-SIM-02) | TM | **to be finalized in the MDB phase — not invented here** |
+| Service 1 — Request verification | Command-verification ACKs / verification chain (REQ-SIM-03, REQ-TMC-04) | TM | acceptance / execution stages **to be finalized in the MDB phase — not invented here** |
+| Service 9 — Time management | Time-correlation concept seed (Epic 2 Phase 4; full unification = Epic 3) | TM | time format / correlation **to be finalized — not invented here** |
+
+> The service numbers above are the conventional PUS service identifiers. **The
+> exact PUS secondary-header field widths, the per-service message subtypes, and
+> the HK data-field parameter field-map are deliberately NOT specified here** — they
+> are chosen against ECSS-E-ST-70-41 and frozen in the relevant Epic 2 phase, then
+> recorded in this section (see §2 intro and `docs/specs/control.md`).
+
+### 2.3 Yamcs ingest path & XTCE MDB
+
+| Aspect | Confirmed value |
+|---|---|
+| MCS | **Yamcs** (open-source, Java 17), from the official Yamcs quickstart. |
+| TM ingest link | `org.yamcs.tctm.UdpTmDataLink` over **UDP** — **1 datagram = 1 CCSDS packet**. |
+| Packet preprocessor | Sets packet time + sequence count (from the primary header §2.1). |
+| Mission database (MDB) | **XTCE** XML — defines parameters (position, type, raw→engineering calibrators), limits, and the telecommand set (REQ-TMC-01). |
+| Decommutation | Yamcs decodes each packet against the XTCE MDB to **engineering-unit** parameters (REQ-TMC-02); limit checks raise OOL alarms (REQ-TMC-03). |
+| TC link | Commands go out over a **UDP TC link** (REQ-TMC-04). |
+| Operator surface | Yamcs **web UI** on the configured HTTP port (quickstart default **8090**); health state + OOL alarms queryable there (REQ-TMC-05). |
+
+> The full XTCE MDB summary (parameter set, calibration curves, limits, command
+> set) is produced in Epic 2 Phase 4 (MIB summary doc) and reflected here as the
+> Phase 2 / Phase 3 contracts freeze.
 
 ### 2.4 Real vs simulated
 
-Per SRD §5: control-side telemetry is **SIMULATED** but CCSDS/PUS-compliant and
-**labelled simulated everywhere**. This ICD section will be filled with the
-confirmed structures before Epic 2 implementation.
+Per SRD §5: control-side telemetry is **SIMULATED** but **CCSDS / PUS-compliant**
+in structure and **labelled "simulated" everywhere** (data, web UI, logs,
+reports, docs). The Python simulator (`control/simulator/`) frames the CCSDS +
+PUS packets described above and emits them over UDP; nothing here is real
+spacecraft data.

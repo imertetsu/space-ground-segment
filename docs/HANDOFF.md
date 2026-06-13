@@ -4,7 +4,7 @@
 > every epic, never endlessly appended. Cap ~150 lines. Read this first when
 > re-entering the project after a gap. Full methodology + conventions: `CLAUDE.md`.
 
-_Last updated: 2026-06-13 — Epic 1 (payload) CLOSED and merged to `main`._
+_Last updated: 2026-06-13 — Epic 1 CLOSED (on `main`); Epic 2 (control) Phase 0 done on `epic/control`._
 
 ## Stack snapshot
 
@@ -25,7 +25,21 @@ _Last updated: 2026-06-13 — Epic 1 (payload) CLOSED and merged to `main`._
 
 ## In-flight work
 
-- None. Epic 1 is complete and on `main`.
+- **Epic 2 (control / FOS) on branch `epic/control`. Phase 0 DONE** (riskiest
+  assumption proven): the Yamcs **quickstart** is scaffolded at `control/yamcs/`
+  and **builds + runs on this machine behind Avast** (Maven 3.9.9 via `mvnw` +
+  Java 17). The CCSDS→Yamcs→XTCE **decommutation loop is verified end-to-end**:
+  `python simulator.py` → CCSDS over UDP :10015 → `UdpTmDataLink` → MDB (XTCE) →
+  parameter `ACQUIRED` (raw+eng) via the REST API and web UI (:8090). Spec:
+  `docs/specs/control.md`; control REQs in SRD §1A; ICD §2 filled.
+- Phase 0 uses the **stock quickstart** MDB/simulator to prove the toolchain. Our
+  mission HK params, **labelled** simulator, calibration, limits, commands = Phases
+  1–3. Pinned: simulator=Python, Yamcs via `mvnw`, UDP transport, XTCE MDB.
+- **Next: Phase 1 (simulator)** — periodic HK (PUS-3) stream, realistic dynamics +
+  configurable anomaly injection, PUS-5 events; freeze the packet/APID field-map.
+  (The 3 ESCALATED decisions in `docs/specs/control.md §4` — HK param set, anomaly
+  scenarios, Yamcs web UI as operator surface — bind at Phase 1; proposed defaults
+  recommended.)
 
 ## Epic 1 (payload) — outcome
 
@@ -41,8 +55,9 @@ _Last updated: 2026-06-13 — Epic 1 (payload) CLOSED and merged to `main`._
 
 ## Recent decisions worth remembering
 
-- Language = English; timeliness = NTC; CI = GitLab + GitHub mirror; remote will be
-  **GitHub** (not yet created/pushed — do not publish without the user's OK).
+- Language = English; timeliness = NTC; CI = GitLab + GitHub mirror; remote =
+  **GitHub** `origin` (https://github.com/imertetsu/space-ground-segment) — `main`
+  pushed. Don't push other branches without the user's OK.
 - Verified collection IDs: L1 `EO:EUM:DAT:0411` (`SL_1_RBT`), L2 `EO:EUM:DAT:0412`
   (`SL_2_WST`) — `docs/icd/ICD.md`.
 - Real cloud screening uses the S8 BT threshold only (`default.toml`
@@ -60,9 +75,11 @@ _Last updated: 2026-06-13 — Epic 1 (payload) CLOSED and merged to `main`._
 
 - **EUMETSAT creds** live in `.env` (gitignored) and work; network/Bash needs
   `dangerouslyDisableSandbox` + the Windows CA bundle (Avast TLS interception).
-- **Avast TLS interception** breaks `pip` cert verification (host + Docker): point
-  pip at a Windows CA bundle (`PIP_CERT`/`SSL_CERT_FILE`); CI runners are
-  unaffected (committed `Dockerfile` is clean).
+- **Avast TLS interception** breaks SSL for pip/git/curl/Maven/Java (host + Docker).
+  Per-tool fixes: pip → `PIP_CERT`/`SSL_CERT_FILE` = Windows CA bundle; git →
+  `http.sslBackend=schannel`; curl → `ssl-no-revoke` (via `CURL_HOME/.curlrc`);
+  Maven/Java (`mvnw`) → `JDK_JAVA_OPTIONS=-Djavax.net.ssl.trustStoreType=Windows-ROOT`
+  + the curl fix. CI runners unaffected (committed Dockerfiles/CI clean).
 - numpy/netCDF4 ABI import RuntimeWarning is benign.
 - Real EO data/reports under `data/` + `D:/sgs` (gitignored/scratch — deletable).
 - `.venv/`, `data/`, `*.nc`, `*.pem` are gitignored — never commit creds/EO data.
@@ -77,6 +94,8 @@ _Last updated: 2026-06-13 — Epic 1 (payload) CLOSED and merged to `main`._
 
 ## Next step
 
-- **Epic 2 — FOS control:** spacecraft simulator emitting CCSDS/PUS → Yamcs + XTCE
-  MIB → decommutation → limit checking → telecommanding. Branch `epic/control`;
-  run prompt-engineer → product-owner for `docs/specs/control.md`, then Phase 0.
+- **Epic 2 — Phase 1 (simulator):** build our Python CCSDS/PUS simulator in
+  `control/simulator/` — periodic PUS-3 HK stream (proposed param set), realistic
+  dynamics + configurable anomaly injection, PUS-5 events; **label telemetry
+  simulated**; freeze the packet/APID field-map (the decode contract for the MDB).
+  Confirm the 3 ESCALATED decisions (`docs/specs/control.md §4`) first.

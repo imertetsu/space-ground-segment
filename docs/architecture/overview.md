@@ -24,7 +24,7 @@ Modular monorepo with two bounded contexts and a cross-cutting shared layer. The
         │      payload/  (PDGS)        │      │       control/  (FOS)           │
         │      Python                  │      │       Java / Yamcs              │
         │                              │      │                                 │
-        │  cli                         │      │  (Epic 2 — TBD):                │
+        │  cli                         │      │  (Epic 2 — WIP):                │
         │   └─ ingestion │ processing  │      │   TM/TC, CCSDS, PUS, XTCE MIB   │
         │      │ validation            │      │                                 │
         │      └─ catalogue            │      │                                 │
