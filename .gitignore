@@ -66,3 +66,6 @@ data/
 !viz/public/data/
 !viz/public/data/**
 
+# Claude Code files — kept locally, not published to the repo
+CLAUDE.md
+.claude/
