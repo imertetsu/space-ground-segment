@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-06-13T22:29:48.761083Z",
+  "generated_at": "2026-06-14T17:32:52.199597Z",
   "note": "Exported from the live shared catalogue by viz/tools/export_snapshot.py (read-only). Payload rows are REAL EUMETSAT products; control rows are SIMULATED Yamcs telemetry references; orbit comes from the REAL TLE.",
   "platform": {
     "name": "SENTINEL-3A",
@@ -7,34 +7,6 @@
     "tle_file": "data/sentinel3a.tle"
   },
   "catalogue": [
-    {
-      "entry_id": "S3A_SL_1_RBT____20260515T230350_L1",
-      "origin": "payload",
-      "simulated": false,
-      "product_type": "SL_1_RBT",
-      "status": "REGISTERED",
-      "sensing_time": "2026-05-15T23:03:50Z",
-      "ingest_time": "2026-05-16T01:00:00Z",
-      "reference": "data/S3A_SL_1_RBT____20260515T230350.SEN3",
-      "source_version": null,
-      "source_refs": [],
-      "detail": "payload product (REAL data) mirrored from PDGS SQLite catalogue (read-only)"
-    },
-    {
-      "entry_id": "S3A_SST_L2_DERIVED__20260515T230350",
-      "origin": "payload",
-      "simulated": false,
-      "product_type": "SST_L2_DERIVED",
-      "status": "VALIDATED",
-      "sensing_time": "2026-05-15T23:03:50Z",
-      "ingest_time": "2026-05-16T01:05:00Z",
-      "reference": "data/derived/S3A_SST_L2_DERIVED__20260515T230350.nc",
-      "source_version": "pdgs-sst-1.0",
-      "source_refs": [
-        "S3A_SL_1_RBT____20260515T230350_L1"
-      ],
-      "detail": "payload product (REAL data) mirrored from PDGS SQLite catalogue (read-only)"
-    },
     {
       "entry_id": "yamcs://myproject/parameters/SGS/obc_temp",
       "origin": "control",
@@ -94,6 +66,47 @@
         "/SGS/obc_temp"
       ],
       "detail": "OOL (SIMULATED)"
+    },
+    {
+      "entry_id": "S3A_SL_1_RBT____20260519T230905_20260519T231205_20260521T025341_0179_139_301_0900_MAR_O_NT_004.SEN3",
+      "origin": "payload",
+      "simulated": false,
+      "product_type": "SL_1_RBT",
+      "status": "REGISTERED",
+      "sensing_time": "2026-05-19T23:09:05.320843Z",
+      "ingest_time": "2026-06-14T17:29:21.951873Z",
+      "reference": "data\\products\\54b4fa6328\\S3A_SL_1_RBT____20260519T230905_20260519T231205_20260521T025341_0179_139_301_0900_MAR_O_NT_004.SEN3",
+      "source_version": null,
+      "source_refs": [],
+      "detail": "payload product (REAL data) mirrored from PDGS SQLite catalogue (read-only)"
+    },
+    {
+      "entry_id": "S3A_SL_2_WST____20260519T222848_20260520T000947_20260521T045425_6059_139_300______MAR_O_NT_003.SEN3",
+      "origin": "payload",
+      "simulated": false,
+      "product_type": "SL_2_WST",
+      "status": "REGISTERED",
+      "sensing_time": "2026-05-19T22:28:48.174720Z",
+      "ingest_time": "2026-06-14T17:30:35.449074Z",
+      "reference": "data\\products\\5a0ef3bc07\\S3A_SL_2_WST____20260519T222848_20260520T000947_20260521T045425_6059_139_300______MAR_O_NT_003.SEN3",
+      "source_version": null,
+      "source_refs": [],
+      "detail": "payload product (REAL data) mirrored from PDGS SQLite catalogue (read-only)"
+    },
+    {
+      "entry_id": "S3A_SL_1_RBT____20260519T230905_20260519T231205_20260521T025341_0179_139_301_0900_MAR_O_NT_004.SEN3__SST_L2_DERIVED",
+      "origin": "payload",
+      "simulated": false,
+      "product_type": "SST_L2_DERIVED",
+      "status": "VALIDATED",
+      "sensing_time": "2026-05-19T23:09:05.579874Z",
+      "ingest_time": "2026-06-14T17:30:39.901105Z",
+      "reference": "data\\products\\S3A_SL_1_RBT____20260519T230905_20260519T231205_20260521T025341_0179_139_301_0900_MAR_O_NT_004.SEN3__SST_L2_DERIVED.nc",
+      "source_version": "0.0.0",
+      "source_refs": [
+        "S3A_SL_1_RBT____20260519T230905_20260519T231205_20260521T025341_0179_139_301_0900_MAR_O_NT_004.SEN3"
+      ],
+      "detail": "payload product (REAL data) mirrored from PDGS SQLite catalogue (read-only)"
     }
   ],
   "anomalies": [
